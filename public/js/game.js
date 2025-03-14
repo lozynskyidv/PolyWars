@@ -119,6 +119,8 @@ scene.add(ground);
 
 // Set up first-person controls
 const controls = new PointerLockControls(camera, document.body);
+// Make controls accessible globally for Samsung fixes
+window.gameControls = controls;
 
 // iOS Safari workaround for PointerLockControls
 if (isIOS) {
@@ -1674,4 +1676,34 @@ document.addEventListener('startGame', function() {
             }
         }, 100);
     }
+});
+
+// Add a listener for the gameStarted event for Samsung devices
+document.addEventListener('gameStarted', function(e) {
+    console.log('gameStarted event received with data:', e.detail);
+    
+    // Update player data with event details
+    if (e.detail) {
+        playerData.name = e.detail.name || 'Player';
+        playerData.team = e.detail.team || 'republicans';
+    }
+    
+    // Create player marker
+    createPlayerMarker();
+    
+    // Load the map
+    loadMap();
+    
+    // Show instructions after hiding the start screen
+    instructions.style.display = 'block';
+    
+    // Join the game via Socket.IO
+    socket.emit('joinGame', playerData);
+    
+    // Check orientation if on mobile
+    if (isTouchDevice) {
+        checkOrientation();
+    }
+    
+    console.log('Game started from gameStarted event with player:', playerData);
 }); 

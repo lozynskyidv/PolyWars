@@ -66,27 +66,199 @@
                 }, 500);
             }
             
-            // Samsung/Android specific event fixes
-            if (/Android/.test(navigator.userAgent) || /SamsungBrowser/.test(navigator.userAgent)) {
-                console.log("Android/Samsung device detected by initial script");
+            // Samsung/Android ENHANCED handling - more aggressive approach
+            if (/Android/.test(navigator.userAgent) || /samsung/i.test(navigator.userAgent) || /SM-/.test(navigator.userAgent) || /SAMSUNG/.test(navigator.userAgent) || /SamsungBrowser/.test(navigator.userAgent)) {
+                console.log("ENHANCED: Android/Samsung device detected by initial script");
+                alert("Samsung/Android device detected. Touch events will be enhanced.");
+                
                 // Force hardware acceleration to improve touch responsiveness
                 document.body.style.transform = 'translateZ(0)';
                 document.body.style.webkitTransform = 'translateZ(0)';
                 
-                // Add event handling for instruction overlay
+                // Add event handling for entire document
+                document.addEventListener('click', function(e) {
+                    console.log("ENHANCED: Document click");
+                    tryStartGame(e);
+                }, false);
+                
+                document.addEventListener('touchstart', function(e) {
+                    console.log("ENHANCED: Document touchstart");
+                    tryStartGame(e);
+                }, {passive: false});
+                
+                document.addEventListener('touchend', function(e) {
+                    console.log("ENHANCED: Document touchend");
+                    tryStartGame(e);
+                }, {passive: false});
+                
+                // Special handling for start button
                 setTimeout(function() {
-                    var instructionsElement = document.getElementById('instructions');
-                    if (instructionsElement) {
+                    var startButton = document.getElementById('startButton');
+                    if (startButton) {
                         ['touchstart', 'touchend', 'click'].forEach(function(eventType) {
-                            instructionsElement.addEventListener(eventType, function(e) {
-                                console.log("Samsung/Android " + eventType + " on instructions from initial script");
-                                e.preventDefault();
-                                var event = new CustomEvent('startGame');
-                                document.dispatchEvent(event);
+                            startButton.addEventListener(eventType, function(e) {
+                                console.log("ENHANCED: Samsung start button " + eventType);
+                                if (!startButton.disabled) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    startGame();
+                                }
                             }, {passive: false});
                         });
                     }
+                }, 500);
+                
+                // Add event handling for instruction overlay - try multiple times
+                var instructionsAttemptsMax = 5;
+                var instructionsAttempts = 0;
+                var instructionsInterval = setInterval(function() {
+                    var instructionsElement = document.getElementById('instructions');
+                    if (instructionsElement) {
+                        console.log("ENHANCED: Found instructions element, adding handlers");
+                        ['touchstart', 'touchend', 'click'].forEach(function(eventType) {
+                            instructionsElement.addEventListener(eventType, function(e) {
+                                console.log("ENHANCED: Samsung/Android " + eventType + " on instructions");
+                                e.preventDefault();
+                                e.stopPropagation();
+                                var event = new CustomEvent('startGame');
+                                document.dispatchEvent(event);
+                                
+                                // Direct bypass for Samsung
+                                setTimeout(function() {
+                                    if (instructionsElement.style.display !== 'none') {
+                                        console.log("ENHANCED: Forcing instruction hide");
+                                        instructionsElement.style.display = 'none';
+                                        
+                                        var touchControls = document.getElementById('touchControls');
+                                        if (touchControls) {
+                                            touchControls.style.display = 'block';
+                                        }
+                                        
+                                        // Try to manually trigger events
+                                        try {
+                                            var controls = window.gameControls;
+                                            if (controls) {
+                                                controls.lock();
+                                                controls.dispatchEvent({ type: 'lock' });
+                                            }
+                                        } catch(e) {
+                                            console.error("ENHANCED: Error triggering controls", e);
+                                        }
+                                    }
+                                }, 100);
+                            }, {passive: false});
+                        });
+                        clearInterval(instructionsInterval);
+                    } else {
+                        instructionsAttempts++;
+                        console.log("ENHANCED: Searching for instructions element, attempt " + instructionsAttempts);
+                        if (instructionsAttempts >= instructionsAttemptsMax) {
+                            console.log("ENHANCED: Max attempts reached, giving up");
+                            clearInterval(instructionsInterval);
+                        }
+                    }
                 }, 1000);
+                
+                // Global fallback function
+                window.startGame = function() {
+                    console.log("ENHANCED: Global startGame called");
+                    
+                    // Try to get form values and hide start screen
+                    var startScreen = document.getElementById('startScreen');
+                    var playerNameInput = document.getElementById('playerName');
+                    var teamDemocrat = document.getElementById('teamDemocrat');
+                    var teamRepublican = document.getElementById('teamRepublican');
+                    
+                    if (startScreen) {
+                        try {
+                            // Try to get name and team
+                            var name = playerNameInput ? playerNameInput.value.trim() : "Player";
+                            var team = "";
+                            
+                            if (name.length < 2) name = "Player";
+                            
+                            if (teamDemocrat && teamDemocrat.classList.contains('selected')) {
+                                team = 'democrats';
+                            } else if (teamRepublican && teamRepublican.classList.contains('selected')) {
+                                team = 'republicans';
+                            } else {
+                                // Default to a team if none selected
+                                team = 'republicans';
+                            }
+                            
+                            console.log("ENHANCED: Starting game with name=" + name + " team=" + team);
+                            
+                            // Store in window for access
+                            window.playerData = {
+                                name: name,
+                                team: team
+                            };
+                            
+                            // Hide start screen
+                            startScreen.style.display = 'none';
+                            
+                            // Show instruction screen
+                            var instructions = document.getElementById('instructions');
+                            if (instructions) {
+                                instructions.style.display = 'block';
+                            }
+                            
+                            // Dispatch a custom event that the game.js can listen for
+                            var event = new CustomEvent('gameStarted', {
+                                detail: { name: name, team: team }
+                            });
+                            document.dispatchEvent(event);
+                            
+                        } catch(e) {
+                            console.error("ENHANCED: Error in startGame", e);
+                        }
+                    }
+                };
+                
+                // Helper function for trying to start the game from any touch
+                function tryStartGame(e) {
+                    var startScreen = document.getElementById('startScreen');
+                    var instructions = document.getElementById('instructions');
+                    
+                    if (startScreen && startScreen.style.display !== 'none') {
+                        // Don't do anything if on start screen - let the normal flow work
+                        return;
+                    }
+                    
+                    if (instructions && instructions.style.display !== 'none') {
+                        console.log("ENHANCED: Instructions visible, trying to start game");
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        // Dispatch our custom event
+                        var event = new CustomEvent('startGame');
+                        document.dispatchEvent(event);
+                        
+                        // Also try direct manipulation
+                        setTimeout(function() {
+                            if (instructions.style.display !== 'none') {
+                                console.log("ENHANCED: Forcing instruction hide");
+                                instructions.style.display = 'none';
+                                
+                                var touchControls = document.getElementById('touchControls');
+                                if (touchControls) {
+                                    touchControls.style.display = 'block';
+                                }
+                                
+                                // Try to manually trigger events
+                                try {
+                                    var controls = window.gameControls;
+                                    if (controls) {
+                                        controls.lock();
+                                        controls.dispatchEvent({ type: 'lock' });
+                                    }
+                                } catch(e) {
+                                    console.error("ENHANCED: Error triggering controls", e);
+                                }
+                            }
+                        }, 100);
+                    }
+                }
             }
         });
     </script>
