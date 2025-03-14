@@ -5,7 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="msapplication-tap-highlight" content="no">
     <title>PolyWars</title>
+    <!-- iOS Safari fix for event handling -->
+    <script>
+        // Fix for iOS Safari touch events
+        window.addEventListener('load', function() {
+            // Add touch listeners to document for iOS Safari
+            document.addEventListener('touchstart', function() {
+                console.log('Document touchstart registered');
+            }, false);
+            
+            // Force redraw on iOS to ensure touch events work
+            document.body.style.webkitTransform = 'scale(1)';
+            
+            // Prevent unwanted behaviors
+            document.addEventListener('gesturestart', function(e) {
+                e.preventDefault();
+            });
+        });
+    </script>
     <style>
         body {
             margin: 0;

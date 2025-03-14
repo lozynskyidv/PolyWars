@@ -100,6 +100,22 @@ scene.add(ground);
 // Set up first-person controls
 const controls = new PointerLockControls(camera, document.body);
 
+// iOS Safari workaround for PointerLockControls
+if (isIOS) {
+    // Patch the PointerLockControls for iOS Safari
+    const originalLock = controls.lock;
+    controls.lock = function() {
+        console.log('Patched lock method called for iOS');
+        try {
+            originalLock.call(controls);
+        } catch (error) {
+            console.warn('Error in original lock:', error);
+            // Fire the lock event manually if the API fails
+            controls.dispatchEvent({ type: 'lock' });
+        }
+    };
+}
+
 // Additional mobile device compatibility
 if (isTouchDevice) {
     // Add a debug tap event to document.body for testing
@@ -328,33 +344,110 @@ instructions.addEventListener('click', function () {
     controls.lock();
 });
 
-// Add enhanced touchstart event listener for iOS devices
+// Enhanced handling for iOS
 instructions.addEventListener('touchstart', function (e) {
-    console.log('Touchstart event fired');
+    console.log('Touchstart event fired on iOS: ' + isIOS);
     e.preventDefault();
     
-    // For iOS devices, we need special handling
+    // For iOS Safari, we need a more aggressive approach
     if (isIOS) {
-        console.log('iOS device detected, using special handling');
-        // Delay to ensure event is processed
+        console.log('iOS device detected, attempting multiple methods');
+        
+        // Direct method - try without delay first
+        controls.lock();
+        
+        // Also try with a sequence of delays as fallbacks
         setTimeout(() => {
+            console.log('iOS fallback 1: trying lock again after 100ms');
             controls.lock();
+            
+            // Create a simulated click as another fallback
+            setTimeout(() => {
+                console.log('iOS fallback 2: simulating click event');
+                const clickEvent = new MouseEvent('click', {
+                    view: window,
+                    bubbles: true,
+                    cancelable: true
+                });
+                instructions.dispatchEvent(clickEvent);
+                
+                // Last attempt with longer delay
+                setTimeout(() => {
+                    console.log('iOS fallback 3: final attempt with direct DOM API');
+                    // For iOS Safari, try to focus an element first
+                    document.body.focus();
+                    controls.lock();
+                }, 300);
+            }, 200);
         }, 100);
     } else {
         controls.lock();
     }
 });
 
-// Add touchend listener as fallback for iOS
+// Older iOS devices sometimes work better with touchend
 instructions.addEventListener('touchend', function (e) {
     console.log('Touchend event fired');
     if (isIOS) {
         e.preventDefault();
+        console.log('iOS touchend handler triggered');
         setTimeout(() => {
             controls.lock();
-        }, 100);
+        }, 10);
     }
 });
+
+// Add special handling for iOS Safari
+if (isIOS) {
+    // Add a persistent tap overlay that's always active
+    const iosTapOverlay = document.createElement('div');
+    iosTapOverlay.id = 'iosTapOverlay';
+    iosTapOverlay.style.position = 'absolute';
+    iosTapOverlay.style.top = '0';
+    iosTapOverlay.style.left = '0';
+    iosTapOverlay.style.width = '100%';
+    iosTapOverlay.style.height = '100%';
+    iosTapOverlay.style.zIndex = '3000';
+    iosTapOverlay.style.display = 'none';
+    iosTapOverlay.style.background = 'transparent';
+    document.body.appendChild(iosTapOverlay);
+    
+    // Add instructions to the specific overlay
+    const iosTapText = document.createElement('div');
+    iosTapText.style.position = 'absolute';
+    iosTapText.style.top = '50%';
+    iosTapText.style.left = '50%';
+    iosTapText.style.transform = 'translate(-50%, -50%)';
+    iosTapText.style.color = 'white';
+    iosTapText.style.fontSize = '26px';
+    iosTapText.style.textAlign = 'center';
+    iosTapText.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    iosTapText.style.padding = '30px';
+    iosTapText.style.borderRadius = '15px';
+    iosTapText.innerHTML = 'Tap anywhere<br>to start';
+    iosTapOverlay.appendChild(iosTapText);
+    
+    // Handle touch on this overlay
+    iosTapOverlay.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('iOS overlay touchstart fired');
+        
+        // Hide the overlay
+        iosTapOverlay.style.display = 'none';
+        
+        // Try to lock controls
+        controls.lock();
+    });
+    
+    // Show the iOS-specific overlay when needed
+    controls.addEventListener('unlock', function() {
+        if (startScreen.style.display === 'none') {
+            instructions.style.display = 'none';
+            iosTapOverlay.style.display = 'block';
+        }
+    });
+}
 
 controls.addEventListener('lock', function () {
     instructions.style.display = 'none';
