@@ -56,7 +56,8 @@ io.on('connection', (socket) => {
             position: playerData.position || { x: 0, y: 1.6, z: 0 },
             rotation: playerData.rotation || { x: 0, y: 0, z: 0 },
             color: playerData.team === 'democrats' ? 0x3b5998 : 0xdb2828,
-            lastUpdate: Date.now()
+            lastUpdate: Date.now(),
+            isMobile: !!playerData.isMobile // Ensure boolean value
         };
         playerCount++;
         
@@ -66,6 +67,10 @@ io.on('connection', (socket) => {
             `y=${players[socket.id].position.y.toFixed(2)}, ` +
             `z=${players[socket.id].position.z.toFixed(2)}`
         );
+        
+        if (players[socket.id].isMobile) {
+            console.log(`Player ${playerData.name} is on a mobile device`);
+        }
         
         // Send the new player all existing players
         socket.emit('currentPlayers', players);
@@ -82,6 +87,7 @@ io.on('connection', (socket) => {
         socket.emit('joinConfirmed', {
             id: socket.id,
             position: players[socket.id].position,
+            isMobile: players[socket.id].isMobile,
             timestamp: Date.now()
         });
     });
@@ -94,26 +100,28 @@ io.on('connection', (socket) => {
             players[socket.id].rotation = data.rotation;
             players[socket.id].lastUpdate = Date.now();
             
+            // Always store and broadcast the mobile flag
+            players[socket.id].isMobile = !!data.isMobile;
+            
             // Broadcast the updated position to all other players
             socket.broadcast.emit('playerMoved', {
                 id: socket.id,
                 position: data.position,
                 rotation: data.rotation,
+                isMobile: players[socket.id].isMobile,
                 timestamp: Date.now()
             });
             
-            // Every 10th update or so, log the position for debug tracking
-            if (Math.random() < 0.1) {
+            // Log position updates more frequently for mobile players
+            const shouldLog = players[socket.id].isMobile ? Math.random() < 0.2 : Math.random() < 0.1;
+            if (shouldLog) {
                 console.log(
-                    `Position update from ${players[socket.id].name}: ` +
+                    `Position update from ${players[socket.id].name}${players[socket.id].isMobile ? ' (mobile)' : ''}: ` +
                     `(${data.position.x.toFixed(2)}, ` +
                     `${data.position.y.toFixed(2)}, ` + 
                     `${data.position.z.toFixed(2)})`
                 );
             }
-            
-            // Uncomment for debugging
-            // console.log(`Position update from ${players[socket.id].name}: (${data.position.x.toFixed(2)}, ${data.position.y.toFixed(2)}, ${data.position.z.toFixed(2)})`);
         }
     });
     

@@ -438,10 +438,6 @@ if (isTouchDevice) {
                                 let x = touchX / maxRadius;
                                 let y = touchY / maxRadius;
                                 
-                                // Clamp values to -1 to 1 range
-                                x = Math.max(-1, Math.min(1, x));
-                                y = Math.max(-1, Math.min(1, y));
-                                
                                 console.log(`[iOS direct touch] x: ${x.toFixed(2)}, y: ${y.toFixed(2)}`);
                                 
                                 // Set movement flags directly with INVERTED Y-axis
@@ -896,6 +892,20 @@ function addOtherPlayer(playerInfo) {
         playerInfo.rotation.z
     );
     
+    // Store whether this player is on a mobile device
+    otherPlayerMesh.userData = otherPlayerMesh.userData || {};
+    otherPlayerMesh.userData.isMobile = playerInfo.isMobile || false;
+    
+    // Add visual indicator for mobile players (optional)
+    if (playerInfo.isMobile) {
+        const mobileIndicator = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0x00ffff })
+        );
+        mobileIndicator.position.y = 2.2; // Position above head
+        otherPlayerMesh.add(mobileIndicator);
+    }
+    
     // Load the 3D model
     const loader = new GLTFLoader();
     loader.load(
@@ -1060,10 +1070,16 @@ socket.on('newPlayer', function(playerInfo) {
 socket.on('playerMoved', function(moveData) {
     if (otherPlayers[moveData.id]) {
         if (POSITION_SYNC_DEBUG) {
-            console.log(`[RECEIVED] Player ${moveData.id} moved to: x=${moveData.position.x.toFixed(2)}, y=${moveData.position.y.toFixed(2)}, z=${moveData.position.z.toFixed(2)}`);
+            console.log(`[RECEIVED] Player ${moveData.id}${moveData.isMobile ? ' (mobile)' : ''} moved to: x=${moveData.position.x.toFixed(2)}, y=${moveData.position.y.toFixed(2)}, z=${moveData.position.z.toFixed(2)}`);
         }
         
-        // Update the other player's position and rotation
+        // Store mobile flag for this player if provided
+        if (moveData.isMobile !== undefined) {
+            otherPlayers[moveData.id].userData = otherPlayers[moveData.id].userData || {};
+            otherPlayers[moveData.id].userData.isMobile = moveData.isMobile;
+        }
+        
+        // Update position and rotation for all players
         otherPlayers[moveData.id].position.set(
             moveData.position.x,
             moveData.position.y,
@@ -1074,6 +1090,11 @@ socket.on('playerMoved', function(moveData) {
             moveData.rotation.y,
             moveData.rotation.z
         );
+        
+        // Add extra logging for mobile player movements to help debugging
+        if (moveData.isMobile) {
+            console.log(`Mobile player ${moveData.id} position updated: x=${moveData.position.x.toFixed(2)}, y=${moveData.position.y.toFixed(2)}, z=${moveData.position.z.toFixed(2)}`);
+        }
     } else {
         console.warn(`Received position update for unknown player: ${moveData.id}`);
     }
@@ -1230,7 +1251,8 @@ function startGame() {
             x: camera.rotation.x,
             y: camera.rotation.y,
             z: camera.rotation.z
-        }
+        },
+        isMobile: isTouchDevice
     });
     
     // Check orientation if on mobile
@@ -1317,21 +1339,23 @@ function sendPositionUpdate(forceSync = false, forceLog = false) {
         Math.abs(lastSentPosition.y - newPosition.y) > 0.01 || 
         Math.abs(lastSentPosition.z - newPosition.z) > 0.01;
     
-    const shouldSync = forceSync || positionChanged;
+    // For mobile devices, always send updates to ensure cross-platform visibility
+    const shouldSync = forceSync || positionChanged || isTouchDevice;
         
     if (shouldSync) {
         // Store last sent position for comparison
         lastSentPosition = { ...newPosition };
         
         // Debug log for position updates
-        if ((forceSync || forceLog || POSITION_SYNC_DEBUG) && positionChanged) {
-            console.log(`[SYNC${forceSync ? '-FORCE' : ''}] Sending position: x=${newPosition.x.toFixed(2)}, y=${newPosition.y.toFixed(2)}, z=${newPosition.z.toFixed(2)}`);
+        if ((forceSync || forceLog || POSITION_SYNC_DEBUG) && (positionChanged || isTouchDevice)) {
+            console.log(`[SYNC${forceSync ? '-FORCE' : ''}${isTouchDevice ? '-MOBILE' : ''}] Sending position: x=${newPosition.x.toFixed(2)}, y=${newPosition.y.toFixed(2)}, z=${newPosition.z.toFixed(2)}`);
         }
         
-        // Send position update
+        // Send position update with device type
         socket.emit('updatePlayer', {
             position: newPosition,
-            rotation: newRotation
+            rotation: newRotation,
+            isMobile: isTouchDevice // Always include the mobile flag
         });
         
         // Mark the time of the update
@@ -1416,20 +1440,23 @@ function animate() {
                 playerModel.visible = false;
             }
             
-            // Force sync periodically regardless of movement
-            forceSyncCounter++;
-            let forceSync = forceSyncCounter >= FORCE_SYNC_INTERVAL;
-            if (forceSync) {
-                forceSyncCounter = 0;
-                sendPositionUpdate(true);
-            } else if (isTouchDevice) {
-                // Mobile: Always try to send updates to ensure real-time sync
-                sendPositionUpdate(false);
+            // Send position updates based on device type and movement
+            if (isTouchDevice) {
+                // Mobile: Always send updates on every frame to ensure cross-platform visibility
+                sendPositionUpdate(true, false);
             } else {
-                // Desktop: Send updates based on time interval
-                const timeSinceLastUpdate = Date.now() - lastPositionUpdate;
-                if (timeSinceLastUpdate > positionUpdateInterval) {
-                    sendPositionUpdate(false);
+                // Desktop: Send updates periodically or when moved
+                forceSyncCounter++;
+                let forceSync = forceSyncCounter >= FORCE_SYNC_INTERVAL;
+                if (forceSync) {
+                    forceSyncCounter = 0;
+                    sendPositionUpdate(true);
+                } else {
+                    // Send updates based on time interval
+                    const timeSinceLastUpdate = Date.now() - lastPositionUpdate;
+                    if (timeSinceLastUpdate > positionUpdateInterval) {
+                        sendPositionUpdate(false);
+                    }
                 }
             }
         }
