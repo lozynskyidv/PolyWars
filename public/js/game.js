@@ -295,11 +295,11 @@ const createTouchControls = () => {
         moveRight = false;
         
         // Use a lower threshold for better response (0.1 instead of 0.2)
-        // Map joystick values to movement directions with INVERTED Y-axis (up = forward, down = backward)
-        if (yInput < -0.1) moveBackward = true;   // Up on joystick = backward
-        if (yInput > 0.1) moveForward = true;     // Down on joystick = forward
-        if (xInput < -0.1) moveLeft = true;       // Left on joystick = left
-        if (xInput > 0.1) moveRight = true;       // Right on joystick = right
+        // Map joystick values to movement directions with correct orientation
+        if (yInput < -0.1) moveForward = true;   // Up on joystick = forward
+        if (yInput > 0.1) moveBackward = true;   // Down on joystick = backward
+        if (xInput < -0.1) moveLeft = true;      // Left on joystick = left
+        if (xInput > 0.1) moveRight = true;      // Right on joystick = right
         
         // Log movement flags so we can see which directions are active
         console.log(`[Movement Flags] forward: ${moveForward}, backward: ${moveBackward}, left: ${moveLeft}, right: ${moveRight}`);
@@ -335,8 +335,6 @@ const createTouchControls = () => {
                     
                     // Force camera position update
                     camera.position.add(moveVector);
-                    
-                    console.log(`[iOS Direct Movement] Applied moveVector: x=${moveVector.x.toFixed(2)}, y=${moveVector.y.toFixed(2)}, z=${moveVector.z.toFixed(2)}`);
                 }
             }
         }
@@ -368,9 +366,8 @@ const createTouchControls = () => {
         camera.rotation.y -= xInput * rotationSpeed;
         
         // Apply vertical rotation (looking up/down) with limits
-        // Invert the Y input to fix the up/down inversion
-        // Negative yInput now looks down, positive looks up
-        const newRotationX = camera.rotation.x + yInput * rotationSpeed; // Inverted from - to +
+        // Negative yInput looks up, positive looks down
+        const newRotationX = camera.rotation.x - yInput * rotationSpeed;
         
         // Limit the vertical rotation to prevent flipping
         const maxVerticalRotation = Math.PI/2 - 0.1; // Just under 90 degrees
@@ -471,11 +468,11 @@ if (isTouchDevice) {
                                 
                                 console.log(`[iOS direct touch] x: ${x.toFixed(2)}, y: ${y.toFixed(2)}`);
                                 
-                                // Set movement flags directly with INVERTED Y-axis
-                                moveForward = y > 0.1;     // Down on joystick = forward
-                                moveBackward = y < -0.1;   // Up on joystick = backward
-                                moveLeft = x < -0.1;       // Left on joystick = left (unchanged)
-                                moveRight = x > 0.1;       // Right on joystick = right (unchanged)
+                                // Set movement flags directly
+                                moveForward = y < -0.1;
+                                moveBackward = y > 0.1;
+                                moveLeft = x < -0.1;
+                                moveRight = x > 0.1;
                             }
                         }, { passive: false });
                     }
