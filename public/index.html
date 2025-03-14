@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PolyWars</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .start-container {
+            width: 90%;
+            max-width: 500px;
+            background-color: rgba(50, 50, 50, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1.2rem;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.9);
+            box-sizing: border-box;
+        }
+        .team-options {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+        }
+        .team-option {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+        .team-democrat {
+            background-color: rgba(59, 89, 152, 0.7);
+            border: 2px solid #3b5998;
+        }
+        .team-democrat.selected {
+            background-color: #3b5998;
+            box-shadow: 0 0 15px rgba(59, 89, 152, 0.8);
+        }
+        .team-republican {
+            background-color: rgba(219, 40, 40, 0.7);
+            border: 2px solid #db2828;
+        }
+        .team-republican.selected {
+            background-color: #db2828;
+            box-shadow: 0 0 15px rgba(219, 40, 40, 0.8);
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin-top: 30px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <!-- Start Screen Overlay -->
+    <div id="startScreen">
+        <div class="start-container">
+            <h1>PolyWars</h1>
+            <div class="form-group">
+                <label for="playerName">Your Name:</label>
+                <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
+            </div>
+            <div class="form-group">
+                <label>Choose Your Team:</label>
+                <div class="team-options">
+                    <div id="teamDemocrat" class="team-option team-democrat">Democrats</div>
+                    <div id="teamRepublican" class="team-option team-republican">Republicans</div>
+                </div>
+            </div>
+            <button id="startButton" disabled>Start Game</button>
+        </div>
+    </div>
+
+    <!-- Socket.IO client -->
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <!-- Load Three.js from CDN -->
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="/js/game.js"></script>
+</body>
+</html> 
