@@ -248,12 +248,17 @@ const createTouchControls = () => {
         mode: 'static',
         position: { left: '50%', top: '50%' },
         color: 'white',
-        size: 100,
-        threshold: 0.1,        // Lower threshold to detect movement
-        fadeTime: 100,         // Faster fade time for better responsiveness
-        multitouch: true,      // Allow multiple touches
-        maxNumberOfNipples: 2, // Allow both joysticks to work simultaneously
-        dataOnly: false        // We need the UI elements
+        size: 120,                    // Larger size for better touch area
+        threshold: 0.05,              // Lower threshold for more sensitivity
+        fadeTime: 0,                  // No fade for instant feedback
+        multitouch: true,             // Support multitouch
+        maxNumberOfNipples: 2,        // Allow both joysticks to work
+        dynamicPage: true,            // Better for full-screen apps
+        restOpacity: 0.8,             // More visible at rest
+        shape: 'circle',              // Circle shape
+        lockX: false,                 // Don't lock axis
+        lockY: false,
+        restJoystick: true            // Return to center when released
     });
     
     rightJoystick = nipplejs.create({
@@ -261,38 +266,48 @@ const createTouchControls = () => {
         mode: 'static',
         position: { left: '50%', top: '50%' },
         color: 'white',
-        size: 100,
-        threshold: 0.1,        // Lower threshold to detect movement
-        fadeTime: 100,         // Faster fade time for better responsiveness
-        multitouch: true,      // Allow multiple touches
-        maxNumberOfNipples: 2, // Allow both joysticks to work simultaneously
-        dataOnly: false        // We need the UI elements
+        size: 120,                    // Larger size for better touch area
+        threshold: 0.05,              // Lower threshold for more sensitivity
+        fadeTime: 0,                  // No fade for instant feedback
+        multitouch: true,             // Support multitouch
+        maxNumberOfNipples: 2,        // Allow both joysticks to work
+        dynamicPage: true,            // Better for full-screen apps
+        restOpacity: 0.8,             // More visible at rest
+        shape: 'circle',              // Circle shape
+        lockX: false,                 // Don't lock axis
+        lockY: false,
+        restJoystick: true            // Return to center when released
     });
     
     // Setup left joystick for movement
     leftJoystick.on('move', (evt, data) => {
-        const forward = data.vector.y;
-        const right = data.vector.x;
+        // Get the raw joystick position (data.vector has x and y normalized between -1 and 1)
+        const xInput = data.vector.x;
+        const yInput = data.vector.y;
         
-        // Reset movement flags
+        // Log raw joystick values and force for debugging
+        console.log(`[Left Joystick] Raw x: ${xInput.toFixed(2)}, y: ${yInput.toFixed(2)}, force: ${data.force.toFixed(2)}, direction: ${data.direction?.angle || 'none'}`);
+        
+        // Clear all movement flags first
         moveForward = false;
         moveBackward = false;
         moveLeft = false;
         moveRight = false;
         
-        // Set movement based on joystick position
-        // Fix the inverted coordinates for iOS/mobile
-        if (forward < -0.2) moveBackward = true; // Changed: < -0.2 triggers backward
-        if (forward > 0.2) moveForward = true;   // Changed: > 0.2 triggers forward
-        if (right < -0.2) moveLeft = true;       // Left is unchanged
-        if (right > 0.2) moveRight = true;       // Right is unchanged
+        // Use a lower threshold for better response (0.1 instead of 0.2)
+        // Map joystick values to movement directions with correct orientation
+        if (yInput < -0.1) moveForward = true;   // Up on joystick = forward
+        if (yInput > 0.1) moveBackward = true;   // Down on joystick = backward
+        if (xInput < -0.1) moveLeft = true;      // Left on joystick = left
+        if (xInput > 0.1) moveRight = true;      // Right on joystick = right
         
-        // More detailed logging for debugging
-        console.log(`[Joystick] Raw values - Y: ${forward.toFixed(2)}, X: ${right.toFixed(2)}`);
-        console.log(`[Movement] forward: ${moveForward}, backward: ${moveBackward}, left: ${moveLeft}, right: ${moveRight}`);
+        // Log movement flags so we can see which directions are active
+        console.log(`[Movement Flags] forward: ${moveForward}, backward: ${moveBackward}, left: ${moveLeft}, right: ${moveRight}`);
     });
     
+    // Ensure we reset movement when joystick is released
     leftJoystick.on('end', () => {
+        console.log('[Left Joystick] Released - stopping movement');
         moveForward = false;
         moveBackward = false;
         moveLeft = false;
@@ -301,14 +316,29 @@ const createTouchControls = () => {
     
     // Setup right joystick for camera rotation
     rightJoystick.on('move', (evt, data) => {
-        // Rotate camera based on joystick position
-        // Higher multiplier means faster rotation
-        const rotationSpeed = 0.05;
-        camera.rotation.y -= data.vector.x * rotationSpeed;
+        // Get the joystick position using vector components
+        const xInput = data.vector.x;
+        const yInput = data.vector.y;
         
-        // Limit vertical rotation to avoid flipping
-        const newRotationX = camera.rotation.x - data.vector.y * rotationSpeed;
-        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, newRotationX));
+        // Debug info to show joystick values
+        console.log(`[Right Joystick] Raw x: ${xInput.toFixed(2)}, y: ${yInput.toFixed(2)}, direction: ${data.direction?.angle || 'none'}`);
+        
+        // Calculate rotation speed based on distance from center (force)
+        const rotationSpeed = 0.05 * data.force;
+        
+        // Apply horizontal rotation (looking left/right)
+        // Negative xInput turns camera left, positive turns right
+        camera.rotation.y -= xInput * rotationSpeed;
+        
+        // Apply vertical rotation (looking up/down) with limits
+        // Negative yInput looks up, positive looks down
+        const newRotationX = camera.rotation.x - yInput * rotationSpeed;
+        
+        // Limit the vertical rotation to prevent flipping
+        const maxVerticalRotation = Math.PI/2 - 0.1; // Just under 90 degrees
+        camera.rotation.x = Math.max(-maxVerticalRotation, Math.min(maxVerticalRotation, newRotationX));
+        
+        console.log(`[Camera] rotation x: ${camera.rotation.x.toFixed(2)}, y: ${camera.rotation.y.toFixed(2)}`);
     });
     
     // Setup shoot button
@@ -351,31 +381,59 @@ if (isTouchDevice) {
         if (isIOS) {
             console.log("Adding iOS-specific touch handlers");
             
-            // Add preventable touch handler to ensure joysticks work on iOS
-            document.addEventListener('touchstart', function(e) {
-                if (controls.isLocked) {
-                    // Only prevent default on game elements, not UI elements
-                    if (!e.target.closest('#startScreen') && !e.target.closest('#instructionScreen')) {
-                        e.preventDefault();
-                    }
-                }
-            }, { passive: false });
-            
-            // Ensure joystick containers have iOS-friendly touch handling
+            // Make joystick elements larger and more responsive on iOS
             const joystickElements = [
                 document.getElementById('leftJoystick'),
                 document.getElementById('rightJoystick'),
                 document.getElementById('shootButton')
             ];
             
+            // Add special iOS-specific touch handlers to each joystick
             joystickElements.forEach(element => {
                 if (element) {
-                    element.addEventListener('touchstart', function(e) {
-                        console.log("Touch start on joystick element");
-                        e.preventDefault();
-                    }, { passive: false });
+                    // Make the elements more visible on iOS
+                    element.style.border = '2px solid rgba(255, 255, 255, 0.8)';
+                    element.style.borderRadius = '50%';
+                    element.style.backgroundColor = 'rgba(50, 50, 50, 0.3)';
+                    
+                    // Add touch event listeners with non-passive option for iOS
+                    ['touchstart', 'touchmove', 'touchend'].forEach(eventType => {
+                        element.addEventListener(eventType, function(e) {
+                            console.log(`Touch ${eventType} on ${element.id}`);
+                            e.preventDefault();
+                            // Don't stop propagation so nippleJS can handle the event
+                        }, { passive: false });
+                    });
                 }
             });
+            
+            // Enhanced handling for iOS touch events on the document
+            document.addEventListener('touchstart', function(e) {
+                // Only prevent default when in game mode and not touching UI elements
+                if (controls.isLocked) {
+                    const isUIelement = e.target.closest('#startScreen') || 
+                                       e.target.closest('#instructionScreen') ||
+                                       e.target.closest('#shootButton');
+                    
+                    if (!isUIelement) {
+                        e.preventDefault();
+                    }
+                }
+            }, { passive: false });
+            
+            // Add touchend and touchcancel handlers to ensure movement stops
+            document.addEventListener('touchend', function(e) {
+                if (controls.isLocked) {
+                    console.log("iOS document touchend event");
+                }
+            }, { passive: true });
+            
+            // Add enhanced iOS viewport meta tags dynamically
+            const metaViewport = document.querySelector('meta[name=viewport]');
+            if (metaViewport) {
+                metaViewport.setAttribute('content', 
+                    'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+            }
         }
     };
     document.head.appendChild(nippleScript);
@@ -1071,46 +1129,46 @@ function animate() {
     
     // Only update controls if locked (user is playing)
     if (controls.isLocked) {
-        // Time delta for smooth movement
-        const delta = 1 / 60;
-        
-        // Calculate movement direction
+        // Calculate movement direction based on keyboard or joystick input
         direction.z = Number(moveForward) - Number(moveBackward);
         direction.x = Number(moveRight) - Number(moveLeft);
         
-        // Make sure we have a valid direction vector
+        // Debug movement direction vector
         if (direction.z !== 0 || direction.x !== 0) {
-            direction.normalize(); // Normalize for consistent movement speed
+            // Normalize only if there's actual movement
+            direction.normalize();
+            console.log(`[Direction Vector] x: ${direction.x.toFixed(2)}, z: ${direction.z.toFixed(2)}`);
             
-            // Add debug logging for movement direction
-            console.log(`[Direction] x: ${direction.x.toFixed(2)}, z: ${direction.z.toFixed(2)}`);
+            // Get the camera's forward and right vectors
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            
+            // Scale vectors by input
+            forward.multiplyScalar(direction.z);
+            right.multiplyScalar(direction.x);
+            
+            // Combine movement vectors
+            const moveVector = new THREE.Vector3();
+            moveVector.addVectors(forward, right);
+            
+            // Only normalize if there's movement
+            if (moveVector.length() > 0) {
+                moveVector.normalize();
+                
+                // Apply stronger movement for mobile
+                const mobileSpeedMultiplier = isTouchDevice ? 2.0 : 1.0;
+                moveVector.multiplyScalar(speed * mobileSpeedMultiplier);
+                
+                // Apply movement directly to camera position
+                camera.position.add(moveVector);
+                
+                console.log(`[Position] x: ${camera.position.x.toFixed(2)}, y: ${camera.position.y.toFixed(2)}, z: ${camera.position.z.toFixed(2)}`);
+            }
         }
-        
-        // Apply movement to velocity with more direct control
-        // Multiply by higher value for more responsive mobile controls
-        const mobileSpeedMultiplier = isTouchDevice ? 1.5 : 1.0; // Higher speed for mobile
-        
-        velocity.z = direction.z * speed * mobileSpeedMultiplier;
-        velocity.x = direction.x * speed * mobileSpeedMultiplier;
-        
-        // Log velocity values for debugging
-        if (moveForward || moveBackward || moveLeft || moveRight) {
-            console.log(`[Velocity] x: ${velocity.x.toFixed(2)}, z: ${velocity.z.toFixed(2)}`);
-        }
-        
-        // Apply velocity to controls (camera)
-        controls.moveRight(-velocity.x);
-        controls.moveForward(-velocity.z);
-        
-        // Dampen velocity for smooth stops (slightly stronger dampening)
-        velocity.x *= 0.85;
-        velocity.z *= 0.85;
         
         // Update player mesh position to match camera
         if (playerMesh) {
             playerMesh.position.copy(camera.position);
-            // Offset slightly down to align with camera
-            playerMesh.position.y = camera.position.y;
             // Rotate to match camera direction
             playerMesh.rotation.y = camera.rotation.y;
             
