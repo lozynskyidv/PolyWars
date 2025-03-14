@@ -50,6 +50,10 @@ const projectiles = {};
 let canShoot = true;
 const SHOOT_COOLDOWN = 500; // milliseconds between shots
 
+// Player position update rate management
+let lastPositionUpdate = 0;
+const positionUpdateInterval = 50; // milliseconds between position updates for non-mobile
+
 // Initialize scene, camera, and renderer
 const scene = new THREE.Scene();
 // Add a blue sky background
@@ -248,17 +252,8 @@ const createTouchControls = () => {
         mode: 'static',
         position: { left: '50%', top: '50%' },
         color: 'white',
-        size: 120,                    // Larger size for better touch area
-        threshold: 0.05,              // Lower threshold for more sensitivity
-        fadeTime: 0,                  // No fade for instant feedback
-        multitouch: true,             // Support multitouch
-        maxNumberOfNipples: 2,        // Allow both joysticks to work
-        dynamicPage: true,            // Better for full-screen apps
-        restOpacity: 0.8,             // More visible at rest
-        shape: 'circle',              // Circle shape
-        lockX: false,                 // Don't lock axis
-        lockY: false,
-        restJoystick: true            // Return to center when released
+        size: 100,
+        threshold: 0.05 // Lower threshold for more responsive movement
     });
     
     rightJoystick = nipplejs.create({
@@ -280,75 +275,63 @@ const createTouchControls = () => {
     });
     
     // Setup left joystick for movement
-    leftJoystick.on('move', (evt, data) => {
-        // Get the raw joystick position (data.vector has x and y normalized between -1 and 1)
-        const xInput = data.vector.x;
-        const yInput = data.vector.y;
+    leftJoystick.on('move', function(evt, data) {
+        // Calculate normalized direction vector
+        const angle = data.angle.radian;
+        const force = Math.min(data.force, 1);  // Cap force at 1
         
-        // Log raw joystick values and force for debugging
-        console.log(`[Left Joystick] Raw x: ${xInput.toFixed(2)}, y: ${yInput.toFixed(2)}, force: ${data.force.toFixed(2)}, direction: ${data.direction?.angle || 'none'}`);
+        // Convert polar to cartesian coordinates (x right+, y forward+)
+        // Note: Add PI/2 to angle because nippleJS uses 0° = right, 90° = down
+        // but we want 0° = down, 90° = right for typical game controls
+        const x = Math.cos(angle) * force;
+        const y = Math.sin(angle) * force;
         
-        // Clear all movement flags first
-        moveForward = false;
-        moveBackward = false;
-        moveLeft = false;
-        moveRight = false;
+        console.log(`Left joystick: angle=${(angle * 180 / Math.PI).toFixed(0)}°, force=${force.toFixed(2)}, x=${x.toFixed(2)}, y=${y.toFixed(2)}`);
         
-        // Use a lower threshold for better response (0.1 instead of 0.2)
-        // Map joystick values to movement directions with INVERTED Y-axis (up = forward, down = backward)
-        if (yInput < -0.1) moveBackward = true;   // Up on joystick = backward
-        if (yInput > 0.1) moveForward = true;     // Down on joystick = forward
-        if (xInput < -0.1) moveLeft = true;       // Left on joystick = left
-        if (xInput > 0.1) moveRight = true;       // Right on joystick = right
+        // Set movement flags based on direction
+        moveForward = y < -0.3;  // Changed from y < 0
+        moveBackward = y > 0.3;  // Changed from y > 0
+        moveLeft = x < -0.3;     // Changed from x < 0
+        moveRight = x > 0.3;     // Changed from x > 0
         
-        // Log movement flags so we can see which directions are active
-        console.log(`[Movement Flags] forward: ${moveForward}, backward: ${moveBackward}, left: ${moveLeft}, right: ${moveRight}`);
-        
-        // On iOS, ensure movement flags trigger immediate camera position updates
-        if (isIOS) {
-            // Apply movement immediately for iOS - this helps with responsiveness
-            // Calculate movement direction based on the flags we just set
-            direction.z = Number(moveForward) - Number(moveBackward);
-            direction.x = Number(moveRight) - Number(moveLeft);
-            
-            if (direction.z !== 0 || direction.x !== 0) {
-                direction.normalize();
-                
-                // Get the camera's forward and right vectors
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-                
-                // Scale vectors by input
-                forward.multiplyScalar(direction.z);
-                right.multiplyScalar(direction.x);
-                
-                // Combine movement vectors
-                const moveVector = new THREE.Vector3();
-                moveVector.addVectors(forward, right);
-                
-                if (moveVector.length() > 0) {
-                    moveVector.normalize();
-                    
-                    // Apply stronger movement for iOS devices
-                    const iosSpeedMultiplier = 2.5;
-                    moveVector.multiplyScalar(speed * iosSpeedMultiplier);
-                    
-                    // Force camera position update
-                    camera.position.add(moveVector);
-                    
-                    console.log(`[iOS Direct Movement] Applied moveVector: x=${moveVector.x.toFixed(2)}, y=${moveVector.y.toFixed(2)}, z=${moveVector.z.toFixed(2)}`);
+        // Force an immediate position update to ensure sync
+        if (controls.isLocked && playerMesh) {
+            socket.emit('updatePlayer', {
+                position: {
+                    x: camera.position.x,
+                    y: camera.position.y,
+                    z: camera.position.z
+                },
+                rotation: {
+                    x: camera.rotation.x,
+                    y: camera.rotation.y,
+                    z: camera.rotation.z
                 }
-            }
+            });
         }
     });
     
-    // Ensure we reset movement when joystick is released
-    leftJoystick.on('end', () => {
-        console.log('[Left Joystick] Released - stopping movement');
+    leftJoystick.on('end', function() {
         moveForward = false;
         moveBackward = false;
         moveLeft = false;
         moveRight = false;
+        
+        // Force an immediate position update to ensure sync
+        if (controls.isLocked && playerMesh) {
+            socket.emit('updatePlayer', {
+                position: {
+                    x: camera.position.x,
+                    y: camera.position.y,
+                    z: camera.position.z
+                },
+                rotation: {
+                    x: camera.rotation.x,
+                    y: camera.rotation.y,
+                    z: camera.rotation.z
+                }
+            });
+        }
     });
     
     // Setup right joystick for camera rotation
@@ -472,10 +455,26 @@ if (isTouchDevice) {
                                 console.log(`[iOS direct touch] x: ${x.toFixed(2)}, y: ${y.toFixed(2)}`);
                                 
                                 // Set movement flags directly with INVERTED Y-axis
-                                moveForward = y > 0.1;     // Down on joystick = forward
-                                moveBackward = y < -0.1;   // Up on joystick = backward
-                                moveLeft = x < -0.1;       // Left on joystick = left (unchanged)
-                                moveRight = x > 0.1;       // Right on joystick = right (unchanged)
+                                moveForward = y < -0.1;     // Up on joystick = forward
+                                moveBackward = y > 0.1;     // Down on joystick = backward
+                                moveLeft = x < -0.1;        // Left on joystick = left (unchanged)
+                                moveRight = x > 0.1;        // Right on joystick = right (unchanged)
+                                
+                                // Force an immediate position update to ensure sync
+                                if (controls.isLocked && playerMesh) {
+                                    socket.emit('updatePlayer', {
+                                        position: {
+                                            x: camera.position.x,
+                                            y: camera.position.y,
+                                            z: camera.position.z
+                                        },
+                                        rotation: {
+                                            x: camera.rotation.x,
+                                            y: camera.rotation.y,
+                                            z: camera.rotation.z
+                                        }
+                                    });
+                                }
                             }
                         }, { passive: false });
                     }
@@ -1311,19 +1310,23 @@ function animate() {
                 playerModel.visible = false;
             }
             
-            // Send position update to server
-            socket.emit('updatePlayer', {
-                position: {
-                    x: camera.position.x,
-                    y: camera.position.y,
-                    z: camera.position.z
-                },
-                rotation: {
-                    x: camera.rotation.x,
-                    y: camera.rotation.y,
-                    z: camera.rotation.z
-                }
-            });
+            // Send position update to server - increase update frequency for mobile
+            const shouldUpdate = isTouchDevice ? true : (Date.now() - lastPositionUpdate > positionUpdateInterval);
+            if (shouldUpdate) {
+                socket.emit('updatePlayer', {
+                    position: {
+                        x: camera.position.x,
+                        y: camera.position.y,
+                        z: camera.position.z
+                    },
+                    rotation: {
+                        x: camera.rotation.x,
+                        y: camera.rotation.y,
+                        z: camera.rotation.z
+                    }
+                });
+                lastPositionUpdate = Date.now();
+            }
         }
     }
     
