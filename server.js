@@ -48,16 +48,20 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // Create new player
+        // Create new player with initial position if provided
         players[socket.id] = {
             id: socket.id,
             name: playerData.name,
             team: playerData.team,
-            position: { x: 0, y: 1.6, z: 0 },
-            rotation: { x: 0, y: 0, z: 0 },
-            color: playerData.team === 'democrats' ? 0x3b5998 : 0xdb2828
+            position: playerData.position || { x: 0, y: 1.6, z: 0 },
+            rotation: playerData.rotation || { x: 0, y: 0, z: 0 },
+            color: playerData.team === 'democrats' ? 0x3b5998 : 0xdb2828,
+            lastUpdate: Date.now()
         };
         playerCount++;
+        
+        // Log the initial position
+        console.log(`Player ${playerData.name} joined at position:`, players[socket.id].position);
         
         // Send the new player all existing players
         socket.emit('currentPlayers', players);
@@ -74,8 +78,10 @@ io.on('connection', (socket) => {
     // Handle player position and rotation updates
     socket.on('updatePlayer', (data) => {
         if (players[socket.id]) {
+            // Update the stored position and rotation
             players[socket.id].position = data.position;
             players[socket.id].rotation = data.rotation;
+            players[socket.id].lastUpdate = Date.now();
             
             // Broadcast the updated position to all other players
             socket.broadcast.emit('playerMoved', {
@@ -83,6 +89,9 @@ io.on('connection', (socket) => {
                 position: data.position,
                 rotation: data.rotation
             });
+            
+            // Uncomment for debugging
+            // console.log(`Position update from ${players[socket.id].name}: (${data.position.x.toFixed(2)}, ${data.position.y.toFixed(2)}, ${data.position.z.toFixed(2)})`);
         }
     });
     

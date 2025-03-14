@@ -54,6 +54,11 @@ const SHOOT_COOLDOWN = 500; // milliseconds between shots
 let lastPositionUpdate = 0;
 const positionUpdateInterval = 50; // milliseconds between position updates for non-mobile
 
+// Position sync debugging - track last known positions from server
+let lastSentPosition = null;
+let forceSyncCounter = 0;
+const FORCE_SYNC_INTERVAL = 30; // Force sync every ~30 frames (0.5 seconds)
+
 // Initialize scene, camera, and renderer
 const scene = new THREE.Scene();
 // Add a blue sky background
@@ -296,18 +301,7 @@ const createTouchControls = () => {
         
         // Force an immediate position update to ensure sync
         if (controls.isLocked && playerMesh) {
-            socket.emit('updatePlayer', {
-                position: {
-                    x: camera.position.x,
-                    y: camera.position.y,
-                    z: camera.position.z
-                },
-                rotation: {
-                    x: camera.rotation.x,
-                    y: camera.rotation.y,
-                    z: camera.rotation.z
-                }
-            });
+            sendPositionUpdate(true);
         }
     });
     
@@ -319,18 +313,7 @@ const createTouchControls = () => {
         
         // Force an immediate position update to ensure sync
         if (controls.isLocked && playerMesh) {
-            socket.emit('updatePlayer', {
-                position: {
-                    x: camera.position.x,
-                    y: camera.position.y,
-                    z: camera.position.z
-                },
-                rotation: {
-                    x: camera.rotation.x,
-                    y: camera.rotation.y,
-                    z: camera.rotation.z
-                }
-            });
+            sendPositionUpdate(true);
         }
     });
     
@@ -462,18 +445,7 @@ if (isTouchDevice) {
                                 
                                 // Force an immediate position update to ensure sync
                                 if (controls.isLocked && playerMesh) {
-                                    socket.emit('updatePlayer', {
-                                        position: {
-                                            x: camera.position.x,
-                                            y: camera.position.y,
-                                            z: camera.position.z
-                                        },
-                                        rotation: {
-                                            x: camera.rotation.x,
-                                            y: camera.rotation.y,
-                                            z: camera.rotation.z
-                                        }
-                                    });
+                                    sendPositionUpdate(true);
                                 }
                             }
                         }, { passive: false });
@@ -1192,8 +1164,24 @@ function startGame() {
     // Show instructions after hiding the start screen
     instructions.style.display = 'block';
     
-    // Join the game via Socket.IO
-    socket.emit('joinGame', playerData);
+    // Set initial position (this will be sent to server when joining)
+    camera.position.set(0, 1.6, 0); // Reset to spawn point
+    
+    // Join the game via Socket.IO - include the initial position
+    socket.emit('joinGame', {
+        name: playerData.name,
+        team: playerData.team,
+        position: {
+            x: camera.position.x,
+            y: camera.position.y,
+            z: camera.position.z
+        },
+        rotation: {
+            x: camera.rotation.x,
+            y: camera.rotation.y,
+            z: camera.rotation.z
+        }
+    });
     
     // Check orientation if on mobile
     if (isTouchDevice) {
@@ -1201,6 +1189,14 @@ function startGame() {
     }
     
     console.log('Game started with player:', playerData);
+    
+    // Force an immediate position update after a short delay to ensure initial sync
+    setTimeout(() => {
+        if (controls.isLocked && playerMesh) {
+            sendPositionUpdate(true);
+            console.log('[SYNC] Sent forced initial position update');
+        }
+    }, 1000);
 }
 
 // Load the map
@@ -1246,6 +1242,46 @@ function loadMap() {
             loadingText.style.color = 'red';
         }
     );
+}
+
+// Function to send position update to server
+function sendPositionUpdate(forceSync = false) {
+    const newPosition = {
+        x: camera.position.x,
+        y: camera.position.y,
+        z: camera.position.z
+    };
+    const newRotation = {
+        x: camera.rotation.x,
+        y: camera.rotation.y, 
+        z: camera.rotation.z
+    };
+    
+    // Only send if position/rotation changed or force sync is requested
+    const positionChanged = !lastSentPosition || 
+        lastSentPosition.x !== newPosition.x || 
+        lastSentPosition.y !== newPosition.y || 
+        lastSentPosition.z !== newPosition.z;
+        
+    if (forceSync || positionChanged) {
+        // Store last sent position for comparison
+        lastSentPosition = { ...newPosition };
+        
+        // Debug log for important position updates
+        if (forceSync) {
+            console.log(`[SYNC-FORCE] Sending position: x=${newPosition.x.toFixed(2)}, y=${newPosition.y.toFixed(2)}, z=${newPosition.z.toFixed(2)}`);
+        }
+        
+        socket.emit('updatePlayer', {
+            position: newPosition,
+            rotation: newRotation
+        });
+        
+        lastPositionUpdate = Date.now();
+        return true;
+    }
+    
+    return false;
 }
 
 // Animation loop
@@ -1310,22 +1346,23 @@ function animate() {
                 playerModel.visible = false;
             }
             
-            // Send position update to server - increase update frequency for mobile
-            const shouldUpdate = isTouchDevice ? true : (Date.now() - lastPositionUpdate > positionUpdateInterval);
-            if (shouldUpdate) {
-                socket.emit('updatePlayer', {
-                    position: {
-                        x: camera.position.x,
-                        y: camera.position.y,
-                        z: camera.position.z
-                    },
-                    rotation: {
-                        x: camera.rotation.x,
-                        y: camera.rotation.y,
-                        z: camera.rotation.z
-                    }
-                });
-                lastPositionUpdate = Date.now();
+            // Force sync periodically regardless of movement
+            forceSyncCounter++;
+            let forceSync = forceSyncCounter >= FORCE_SYNC_INTERVAL;
+            if (forceSync) {
+                forceSyncCounter = 0;
+            }
+            
+            // Send position update to server with different strategies for mobile vs desktop
+            if (isTouchDevice) {
+                // Mobile: Always send updates to ensure real-time sync
+                sendPositionUpdate(forceSync);
+            } else {
+                // Desktop: Send updates based on time interval
+                const timeSinceLastUpdate = Date.now() - lastPositionUpdate;
+                if (forceSync || timeSinceLastUpdate > positionUpdateInterval) {
+                    sendPositionUpdate(forceSync);
+                }
             }
         }
     }
