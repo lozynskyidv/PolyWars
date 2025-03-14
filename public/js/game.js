@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-// Connect to Socket.IO server
-const socket = io();
+// Connect to Socket.IO server with configuration
+const socket = io(CONFIG.SERVER_URL);
 
 // Player data
 let playerData = {

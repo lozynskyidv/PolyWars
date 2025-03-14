@@ -1,0 +1,9 @@
+{
+  "name": "polywars-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for PolyWars, a web-based 3D multiplayer FPS game",
+  "private": true,
+  "dependencies": {
+    "three": "^0.162.0"
+  }
+} 
