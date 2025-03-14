@@ -552,50 +552,191 @@ if (isTouchDevice) {
                     element.style.borderRadius = '50%';
                     element.style.backgroundColor = 'rgba(50, 50, 50, 0.3)';
                     
-                    // For Samsung devices, use non-passive handlers
-                    ['touchstart', 'touchmove', 'touchend'].forEach(eventType => {
-                        element.addEventListener(eventType, function(e) {
-                            console.log(`Android touch ${eventType} on ${element.id}`);
-                            e.preventDefault();
-                        }, { passive: false });
-                    });
-                    
                     // Special handling for left joystick on Android to ensure movement works
                     if (element.id === 'leftJoystick') {
-                        element.style.width = '150px';  // Make left joystick bigger
-                        element.style.height = '150px';
+                        // Make joystick significantly larger for Android
+                        element.style.width = '180px';
+                        element.style.height = '180px';
                         
-                        // Add a specialized touch handler to ensure movement on Android
-                        element.addEventListener('touchmove', function(e) {
+                        // Create a visual indicator inside the joystick
+                        const indicator = document.createElement('div');
+                        indicator.style.position = 'absolute';
+                        indicator.style.top = '50%';
+                        indicator.style.left = '50%';
+                        indicator.style.transform = 'translate(-50%, -50%)';
+                        indicator.style.width = '40px';
+                        indicator.style.height = '40px';
+                        indicator.style.borderRadius = '50%';
+                        indicator.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+                        indicator.style.pointerEvents = 'none';
+                        indicator.id = 'androidJoystickIndicator';
+                        element.appendChild(indicator);
+                        
+                        // Direct Android touch handlers that bypass nipplejs completely
+                        element.addEventListener('touchstart', function(e) {
+                            console.log("Android touchstart on leftJoystick - DIRECT HANDLER");
+                            e.preventDefault();
+                            e.stopPropagation();
+                            
+                            // Make sure nipplejs doesn't interfere
+                            if (leftJoystick && leftJoystick.destroy) {
+                                try {
+                                    leftJoystick.off('move');
+                                    leftJoystick.off('end');
+                                } catch (err) {
+                                    console.log("Error removing nipplejs listeners", err);
+                                }
+                            }
+                            
+                            // Process the touch directly
                             if (e.touches && e.touches[0]) {
-                                // Calculate center of the joystick container
                                 const rect = element.getBoundingClientRect();
                                 const centerX = rect.left + rect.width / 2;
                                 const centerY = rect.top + rect.height / 2;
-                                
-                                // Calculate touch position relative to center
                                 const touchX = e.touches[0].clientX - centerX;
                                 const touchY = e.touches[0].clientY - centerY;
                                 
-                                // Normalize to get vector with -1 to 1 range
+                                // Move the indicator
+                                const indicator = document.getElementById('androidJoystickIndicator');
+                                if (indicator) {
+                                    indicator.style.transform = `translate(calc(-50% + ${touchX}px), calc(-50% + ${touchY}px))`;
+                                }
+                                
+                                // Reset movement flags
+                                moveForward = false;
+                                moveBackward = false;
+                                moveLeft = false;
+                                moveRight = false;
+                                
+                                // Set movement flags based on touch position
                                 const maxRadius = rect.width / 2;
                                 let x = touchX / maxRadius;
                                 let y = touchY / maxRadius;
                                 
-                                // Clamp values to -1 to 1 range
+                                // Clamp values
                                 x = Math.max(-1, Math.min(1, x));
                                 y = Math.max(-1, Math.min(1, y));
                                 
-                                console.log(`[Android direct touch] x: ${x.toFixed(2)}, y: ${y.toFixed(2)}`);
+                                console.log(`[Android direct touchstart] x: ${x.toFixed(2)}, y: ${y.toFixed(2)}`);
                                 
-                                // Set movement flags directly
-                                moveForward = y < -0.1;
-                                moveBackward = y > 0.1;
-                                moveLeft = x < -0.1;
-                                moveRight = x > 0.1;
+                                // Use a very low threshold for better responsiveness
+                                moveForward = y < -0.05;
+                                moveBackward = y > 0.05;
+                                moveLeft = x < -0.05;
+                                moveRight = x > 0.05;
+                                
+                                console.log("Android movement flags:", {
+                                    moveForward, moveBackward, moveLeft, moveRight
+                                });
                             }
                         }, { passive: false });
+                        
+                        element.addEventListener('touchmove', function(e) {
+                            console.log("Android touchmove on leftJoystick - DIRECT HANDLER");
+                            e.preventDefault();
+                            e.stopPropagation();
+                            
+                            // Process the touch directly
+                            if (e.touches && e.touches[0]) {
+                                const rect = element.getBoundingClientRect();
+                                const centerX = rect.left + rect.width / 2;
+                                const centerY = rect.top + rect.height / 2;
+                                const touchX = e.touches[0].clientX - centerX;
+                                const touchY = e.touches[0].clientY - centerY;
+                                
+                                // Move the indicator
+                                const indicator = document.getElementById('androidJoystickIndicator');
+                                if (indicator) {
+                                    indicator.style.transform = `translate(calc(-50% + ${touchX}px), calc(-50% + ${touchY}px))`;
+                                }
+                                
+                                // Reset movement flags
+                                moveForward = false;
+                                moveBackward = false;
+                                moveLeft = false;
+                                moveRight = false;
+                                
+                                // Set movement flags based on touch position
+                                const maxRadius = rect.width / 2;
+                                let x = touchX / maxRadius;
+                                let y = touchY / maxRadius;
+                                
+                                // Clamp values
+                                x = Math.max(-1, Math.min(1, x));
+                                y = Math.max(-1, Math.min(1, y));
+                                
+                                console.log(`[Android direct touchmove] x: ${x.toFixed(2)}, y: ${y.toFixed(2)}`);
+                                
+                                // Use a very low threshold for better responsiveness
+                                moveForward = y < -0.05;
+                                moveBackward = y > 0.05;
+                                moveLeft = x < -0.05;
+                                moveRight = x > 0.05;
+                                
+                                console.log("Android movement flags:", {
+                                    moveForward, moveBackward, moveLeft, moveRight
+                                });
+                                
+                                // Directly apply movement in the touchmove handler for immediate feedback
+                                // This is key for Android responsiveness
+                                if (controls.isLocked) {
+                                    direction.z = Number(moveForward) - Number(moveBackward);
+                                    direction.x = Number(moveRight) - Number(moveLeft);
+                                    
+                                    if (direction.z !== 0 || direction.x !== 0) {
+                                        direction.normalize();
+                                        
+                                        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                                        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                                        
+                                        forward.multiplyScalar(direction.z);
+                                        right.multiplyScalar(direction.x);
+                                        
+                                        const moveVector = new THREE.Vector3();
+                                        moveVector.addVectors(forward, right);
+                                        
+                                        if (moveVector.length() > 0) {
+                                            moveVector.normalize();
+                                            moveVector.multiplyScalar(speed * 3.0); // Even higher multiplier for Android
+                                            
+                                            // Force immediate position update
+                                            camera.position.add(moveVector);
+                                        }
+                                    }
+                                }
+                            }
+                        }, { passive: false });
+                        
+                        element.addEventListener('touchend', function(e) {
+                            console.log("Android touchend on leftJoystick - DIRECT HANDLER");
+                            e.preventDefault();
+                            e.stopPropagation();
+                            
+                            // Reset the indicator position
+                            const indicator = document.getElementById('androidJoystickIndicator');
+                            if (indicator) {
+                                indicator.style.transform = 'translate(-50%, -50%)';
+                            }
+                            
+                            // Reset all movement flags
+                            moveForward = false;
+                            moveBackward = false;
+                            moveLeft = false;
+                            moveRight = false;
+                            
+                            console.log("Android movement flags reset");
+                        }, { passive: false });
                     }
+                    
+                    // For Samsung and other Android devices, also use non-passive handlers
+                    ['touchstart', 'touchmove', 'touchend'].forEach(eventType => {
+                        if (element.id !== 'leftJoystick') { // Skip if we already added custom handlers
+                            element.addEventListener(eventType, function(e) {
+                                console.log(`Android touch ${eventType} on ${element.id}`);
+                                e.preventDefault();
+                            }, { passive: false });
+                        }
+                    });
                 }
             });
             
