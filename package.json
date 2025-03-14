@@ -10,6 +10,7 @@
   "dependencies": {
     "@netlify/functions": "^2.5.1",
     "express": "^4.18.2",
+    "nipplejs": "^0.10.2",
     "socket.io": "^4.8.1",
     "three": "^0.162.0"
   },

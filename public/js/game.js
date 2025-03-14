@@ -26,6 +26,9 @@ try {
     alert("Failed to initialize game connection. Please try again later.");
 }
 
+// Device detection
+const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
 // Player data
 let playerData = {
     name: '',
@@ -104,72 +107,198 @@ instructions.style.fontSize = '18px';
 instructions.style.transform = 'translateY(-50%)';
 instructions.style.padding = '10px';
 instructions.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-instructions.innerHTML = 'Click to play<br>WASD = Move<br>Mouse = Look<br>SPACE = Shoot<br>ESC = Pause';
+
+// Default instructions for desktop
+const desktopInstructions = 'Click to play<br>WASD = Move<br>Mouse = Look<br>SPACE = Shoot<br>ESC = Pause';
+// Mobile-friendly instructions
+const mobileInstructions = 'Tap to play<br>Left joystick = Move<br>Right joystick = Look<br>Red button = Shoot';
+
+// Set appropriate instructions based on device
+instructions.innerHTML = isTouchDevice ? mobileInstructions : desktopInstructions;
 document.body.appendChild(instructions);
 // Initially hide instructions until the start screen is completed
 instructions.style.display = 'none';
+
+// Create orientation message for mobile
+const orientationMessage = document.createElement('div');
+orientationMessage.style.position = 'absolute';
+orientationMessage.style.top = '0';
+orientationMessage.style.left = '0';
+orientationMessage.style.width = '100%';
+orientationMessage.style.height = '100%';
+orientationMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+orientationMessage.style.color = 'white';
+orientationMessage.style.display = 'flex';
+orientationMessage.style.alignItems = 'center';
+orientationMessage.style.justifyContent = 'center';
+orientationMessage.style.zIndex = '2000';
+orientationMessage.style.fontSize = '24px';
+orientationMessage.innerHTML = '<div>Please rotate your device to landscape mode for the best experience</div>';
+orientationMessage.style.display = 'none';
+document.body.appendChild(orientationMessage);
 
 let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
 let moveRight = false;
 let canJump = false;
-let isMobile = false;
+
+// NippleJS joystick instances
+let leftJoystick = null;
+let rightJoystick = null;
+let shootButton = null;
 
 // Add touch controls for mobile
 const createTouchControls = () => {
+    // Create container for joysticks
     const touchControls = document.createElement('div');
     touchControls.style.position = 'absolute';
-    touchControls.style.bottom = '20px';
+    touchControls.style.top = '0';
+    touchControls.style.left = '0';
     touchControls.style.width = '100%';
-    touchControls.style.display = 'flex';
-    touchControls.style.justifyContent = 'space-between';
-    touchControls.style.padding = '0 20px';
+    touchControls.style.height = '100%';
+    touchControls.style.pointerEvents = 'none';
+    touchControls.style.zIndex = '1000';
     touchControls.id = 'touchControls';
-    
-    // Create joystick for movement
-    const joystick = document.createElement('div');
-    joystick.style.width = '100px';
-    joystick.style.height = '100px';
-    joystick.style.borderRadius = '50%';
-    joystick.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
-    joystick.style.position = 'relative';
-    joystick.id = 'joystick';
-    
-    // Create shoot button for mobile
-    const shootButton = document.createElement('div');
-    shootButton.style.width = '80px';
-    shootButton.style.height = '80px';
-    shootButton.style.borderRadius = '50%';
-    shootButton.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-    shootButton.style.display = 'flex';
-    shootButton.style.justifyContent = 'center';
-    shootButton.style.alignItems = 'center';
-    shootButton.style.color = 'white';
-    shootButton.style.fontSize = '16px';
-    shootButton.innerHTML = 'SHOOT';
-    shootButton.id = 'shootButton';
-    
-    touchControls.appendChild(joystick);
-    touchControls.appendChild(shootButton);
     document.body.appendChild(touchControls);
     
-    // Touch controls logic
-    joystick.addEventListener('touchstart', onJoystickStart, false);
-    joystick.addEventListener('touchmove', onJoystickMove, false);
-    joystick.addEventListener('touchend', onJoystickEnd, false);
+    // Left joystick container (for movement)
+    const leftJoystickContainer = document.createElement('div');
+    leftJoystickContainer.style.position = 'absolute';
+    leftJoystickContainer.style.bottom = '70px';
+    leftJoystickContainer.style.left = '70px';
+    leftJoystickContainer.style.width = '120px';
+    leftJoystickContainer.style.height = '120px';
+    leftJoystickContainer.style.pointerEvents = 'auto';
+    leftJoystickContainer.id = 'leftJoystick';
+    touchControls.appendChild(leftJoystickContainer);
     
-    // Shoot button for mobile
-    shootButton.addEventListener('touchstart', shootProjectile, false);
+    // Right joystick container (for camera rotation)
+    const rightJoystickContainer = document.createElement('div');
+    rightJoystickContainer.style.position = 'absolute';
+    rightJoystickContainer.style.bottom = '70px';
+    rightJoystickContainer.style.right = '70px';
+    rightJoystickContainer.style.width = '120px';
+    rightJoystickContainer.style.height = '120px';
+    rightJoystickContainer.style.pointerEvents = 'auto';
+    rightJoystickContainer.id = 'rightJoystick';
+    touchControls.appendChild(rightJoystickContainer);
     
-    // For simplicity, we'll use the whole right half of the screen for looking around
-    document.addEventListener('touchmove', onRightSideTouch, false);
+    // Shoot button
+    shootButton = document.createElement('div');
+    shootButton.style.position = 'absolute';
+    shootButton.style.right = '70px';
+    shootButton.style.top = '70px';
+    shootButton.style.width = '70px';
+    shootButton.style.height = '70px';
+    shootButton.style.borderRadius = '50%';
+    shootButton.style.backgroundColor = 'rgba(255, 0, 0, 0.6)';
+    shootButton.style.border = '2px solid white';
+    shootButton.style.pointerEvents = 'auto';
+    shootButton.style.display = 'flex';
+    shootButton.style.alignItems = 'center';
+    shootButton.style.justifyContent = 'center';
+    shootButton.style.color = 'white';
+    shootButton.style.fontSize = '14px';
+    shootButton.style.fontWeight = 'bold';
+    shootButton.innerHTML = 'SHOOT';
+    shootButton.id = 'shootButton';
+    touchControls.appendChild(shootButton);
+    
+    // Initialize nippleJS joysticks
+    leftJoystick = nipplejs.create({
+        zone: document.getElementById('leftJoystick'),
+        mode: 'static',
+        position: { left: '50%', top: '50%' },
+        color: 'white',
+        size: 100
+    });
+    
+    rightJoystick = nipplejs.create({
+        zone: document.getElementById('rightJoystick'),
+        mode: 'static',
+        position: { left: '50%', top: '50%' },
+        color: 'white',
+        size: 100
+    });
+    
+    // Setup left joystick for movement
+    leftJoystick.on('move', (evt, data) => {
+        const forward = data.vector.y;
+        const right = data.vector.x;
+        
+        // Reset movement flags
+        moveForward = false;
+        moveBackward = false;
+        moveLeft = false;
+        moveRight = false;
+        
+        // Set movement based on joystick position
+        if (forward < -0.5) moveForward = true;
+        if (forward > 0.5) moveBackward = true;
+        if (right < -0.5) moveLeft = true;
+        if (right > 0.5) moveRight = true;
+    });
+    
+    leftJoystick.on('end', () => {
+        moveForward = false;
+        moveBackward = false;
+        moveLeft = false;
+        moveRight = false;
+    });
+    
+    // Setup right joystick for camera rotation
+    rightJoystick.on('move', (evt, data) => {
+        // Rotate camera based on joystick position
+        // Higher multiplier means faster rotation
+        const rotationSpeed = 0.05;
+        camera.rotation.y -= data.vector.x * rotationSpeed;
+        
+        // Limit vertical rotation to avoid flipping
+        const newRotationX = camera.rotation.x - data.vector.y * rotationSpeed;
+        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, newRotationX));
+    });
+    
+    // Setup shoot button
+    shootButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        shootProjectile();
+    });
+    
+    // Initially hide touch controls until player spawns
+    touchControls.style.display = 'none';
 };
 
-// Detect if user is on mobile
-if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-    isMobile = true;
-    createTouchControls();
+// Check and update orientation
+function checkOrientation() {
+    if (!isTouchDevice) return;
+    
+    // Check if device is in portrait mode
+    const isPortrait = window.innerHeight > window.innerWidth;
+    
+    if (isPortrait) {
+        orientationMessage.style.display = 'flex';
+    } else {
+        orientationMessage.style.display = 'none';
+    }
+}
+
+// Detect if user is on mobile and create touch controls
+if (isTouchDevice) {
+    // Load nippleJS script
+    const nippleScript = document.createElement('script');
+    nippleScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js';
+    nippleScript.onload = () => {
+        console.log('nippleJS loaded');
+        // Create touch controls once nippleJS is loaded
+        createTouchControls();
+        // Check initial orientation
+        checkOrientation();
+    };
+    document.head.appendChild(nippleScript);
+    
+    // Add orientation change listener
+    window.addEventListener('resize', checkOrientation);
 }
 
 // Event listeners for pointer lock
@@ -179,6 +308,10 @@ instructions.addEventListener('click', function () {
 
 controls.addEventListener('lock', function () {
     instructions.style.display = 'none';
+    // Show touch controls when game starts if on a touch device
+    if (isTouchDevice && document.getElementById('touchControls')) {
+        document.getElementById('touchControls').style.display = 'block';
+    }
 });
 
 controls.addEventListener('unlock', function () {
@@ -234,6 +367,7 @@ const onKeyUp = function (event) {
     }
 };
 
+// Only add keyboard listeners on non-touch devices or hybrid devices
 document.addEventListener('keydown', onKeyDown);
 document.addEventListener('keyup', onKeyUp);
 
@@ -272,56 +406,6 @@ function shootProjectile() {
             z: velocity.z
         }
     });
-}
-
-// Simplified touch controls for joystick
-let touchStartX = 0;
-let touchStartY = 0;
-
-function onJoystickStart(event) {
-    touchStartX = event.touches[0].clientX;
-    touchStartY = event.touches[0].clientY;
-}
-
-function onJoystickMove(event) {
-    event.preventDefault();
-    const touchX = event.touches[0].clientX;
-    const touchY = event.touches[0].clientY;
-    
-    // Calculate direction
-    const deltaX = touchX - touchStartX;
-    const deltaY = touchY - touchStartY;
-    
-    // Simple threshold-based movement
-    moveForward = deltaY < -20;
-    moveBackward = deltaY > 20;
-    moveLeft = deltaX < -20;
-    moveRight = deltaX > 20;
-}
-
-function onJoystickEnd() {
-    moveForward = false;
-    moveBackward = false;
-    moveLeft = false;
-    moveRight = false;
-}
-
-// Right side touch for looking around
-function onRightSideTouch(event) {
-    if (event.touches.length > 0) {
-        const touch = event.touches[0];
-        if (touch.clientX > window.innerWidth / 2) {
-            event.preventDefault();
-            // Adjust rotation based on touch movement
-            const movementX = event.touches[0].clientX - (event.touches[0].target.getBoundingClientRect().left + event.touches[0].target.getBoundingClientRect().width / 2);
-            const movementY = event.touches[0].clientY - (event.touches[0].target.getBoundingClientRect().top + event.touches[0].target.getBoundingClientRect().height / 2);
-            
-            // Rotate camera based on touch movement
-            camera.rotation.y -= movementX * 0.01;
-            // Limit vertical rotation to avoid flipping
-            camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x - movementY * 0.01));
-        }
-    }
 }
 
 // Player movement speed
@@ -739,6 +823,11 @@ function startGame() {
     // Join the game via Socket.IO
     socket.emit('joinGame', playerData);
     
+    // Check orientation if on mobile
+    if (isTouchDevice) {
+        checkOrientation();
+    }
+    
     console.log('Game started with player:', playerData);
 }
 
@@ -863,6 +952,11 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    
+    // Check orientation on resize if on mobile
+    if (isTouchDevice) {
+        checkOrientation();
+    }
 }
 
 // Start the animation
