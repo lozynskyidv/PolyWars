@@ -29,6 +29,10 @@ try {
 // Device detection
 const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
+// Detect iOS specifically
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 // Player data
 let playerData = {
     name: '',
@@ -320,13 +324,36 @@ if (isTouchDevice) {
 
 // Event listeners for pointer lock
 instructions.addEventListener('click', function () {
+    console.log('Click event fired');
     controls.lock();
 });
 
-// Add touchstart event listener for iOS devices
+// Add enhanced touchstart event listener for iOS devices
 instructions.addEventListener('touchstart', function (e) {
+    console.log('Touchstart event fired');
     e.preventDefault();
-    controls.lock();
+    
+    // For iOS devices, we need special handling
+    if (isIOS) {
+        console.log('iOS device detected, using special handling');
+        // Delay to ensure event is processed
+        setTimeout(() => {
+            controls.lock();
+        }, 100);
+    } else {
+        controls.lock();
+    }
+});
+
+// Add touchend listener as fallback for iOS
+instructions.addEventListener('touchend', function (e) {
+    console.log('Touchend event fired');
+    if (isIOS) {
+        e.preventDefault();
+        setTimeout(() => {
+            controls.lock();
+        }, 100);
+    }
 });
 
 controls.addEventListener('lock', function () {
