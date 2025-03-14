@@ -248,7 +248,12 @@ const createTouchControls = () => {
         mode: 'static',
         position: { left: '50%', top: '50%' },
         color: 'white',
-        size: 100
+        size: 100,
+        threshold: 0.1,        // Lower threshold to detect movement
+        fadeTime: 100,         // Faster fade time for better responsiveness
+        multitouch: true,      // Allow multiple touches
+        maxNumberOfNipples: 2, // Allow both joysticks to work simultaneously
+        dataOnly: false        // We need the UI elements
     });
     
     rightJoystick = nipplejs.create({
@@ -256,7 +261,12 @@ const createTouchControls = () => {
         mode: 'static',
         position: { left: '50%', top: '50%' },
         color: 'white',
-        size: 100
+        size: 100,
+        threshold: 0.1,        // Lower threshold to detect movement
+        fadeTime: 100,         // Faster fade time for better responsiveness
+        multitouch: true,      // Allow multiple touches
+        maxNumberOfNipples: 2, // Allow both joysticks to work simultaneously
+        dataOnly: false        // We need the UI elements
     });
     
     // Setup left joystick for movement
@@ -270,16 +280,16 @@ const createTouchControls = () => {
         moveLeft = false;
         moveRight = false;
         
-        // Set movement based on joystick position using less aggressive thresholds
-        // and respecting the coordinate system (inverted Y-axis on joystick)
-        if (forward < -0.2) moveForward = true;
-        if (forward > 0.2) moveBackward = true;
-        if (right < -0.2) moveLeft = true;
-        if (right > 0.2) moveRight = true;
+        // Set movement based on joystick position
+        // Fix the inverted coordinates for iOS/mobile
+        if (forward < -0.2) moveBackward = true; // Changed: < -0.2 triggers backward
+        if (forward > 0.2) moveForward = true;   // Changed: > 0.2 triggers forward
+        if (right < -0.2) moveLeft = true;       // Left is unchanged
+        if (right > 0.2) moveRight = true;       // Right is unchanged
         
-        // Log joystick values for debugging
-        console.log(`Joystick values - forward: ${forward}, right: ${right}`);
-        console.log(`Movement flags - forward: ${moveForward}, back: ${moveBackward}, left: ${moveLeft}, right: ${moveRight}`);
+        // More detailed logging for debugging
+        console.log(`[Joystick] Raw values - Y: ${forward.toFixed(2)}, X: ${right.toFixed(2)}`);
+        console.log(`[Movement] forward: ${moveForward}, backward: ${moveBackward}, left: ${moveLeft}, right: ${moveRight}`);
     });
     
     leftJoystick.on('end', () => {
@@ -336,6 +346,37 @@ if (isTouchDevice) {
         createTouchControls();
         // Check initial orientation
         checkOrientation();
+        
+        // Special handling for iOS
+        if (isIOS) {
+            console.log("Adding iOS-specific touch handlers");
+            
+            // Add preventable touch handler to ensure joysticks work on iOS
+            document.addEventListener('touchstart', function(e) {
+                if (controls.isLocked) {
+                    // Only prevent default on game elements, not UI elements
+                    if (!e.target.closest('#startScreen') && !e.target.closest('#instructionScreen')) {
+                        e.preventDefault();
+                    }
+                }
+            }, { passive: false });
+            
+            // Ensure joystick containers have iOS-friendly touch handling
+            const joystickElements = [
+                document.getElementById('leftJoystick'),
+                document.getElementById('rightJoystick'),
+                document.getElementById('shootButton')
+            ];
+            
+            joystickElements.forEach(element => {
+                if (element) {
+                    element.addEventListener('touchstart', function(e) {
+                        console.log("Touch start on joystick element");
+                        e.preventDefault();
+                    }, { passive: false });
+                }
+            });
+        }
     };
     document.head.appendChild(nippleScript);
     
@@ -1040,15 +1081,21 @@ function animate() {
         // Make sure we have a valid direction vector
         if (direction.z !== 0 || direction.x !== 0) {
             direction.normalize(); // Normalize for consistent movement speed
+            
+            // Add debug logging for movement direction
+            console.log(`[Direction] x: ${direction.x.toFixed(2)}, z: ${direction.z.toFixed(2)}`);
         }
         
-        // Apply movement to velocity with more direct mapping for mobile
-        if (moveForward || moveBackward) velocity.z -= direction.z * speed;
-        if (moveLeft || moveRight) velocity.x -= direction.x * speed;
+        // Apply movement to velocity with more direct control
+        // Multiply by higher value for more responsive mobile controls
+        const mobileSpeedMultiplier = isTouchDevice ? 1.5 : 1.0; // Higher speed for mobile
+        
+        velocity.z = direction.z * speed * mobileSpeedMultiplier;
+        velocity.x = direction.x * speed * mobileSpeedMultiplier;
         
         // Log velocity values for debugging
         if (moveForward || moveBackward || moveLeft || moveRight) {
-            console.log(`Velocity - x: ${velocity.x}, z: ${velocity.z}`);
+            console.log(`[Velocity] x: ${velocity.x.toFixed(2)}, z: ${velocity.z.toFixed(2)}`);
         }
         
         // Apply velocity to controls (camera)
