@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -25,6 +25,46 @@
             document.addEventListener('gesturestart', function(e) {
                 e.preventDefault();
             });
+            
+            // iOS 13+ specific fix for form elements
+            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                console.log("iOS device detected by initial script");
+                // Add click handlers to team selection buttons
+                setTimeout(function() {
+                    var teamDemocrat = document.getElementById('teamDemocrat');
+                    var teamRepublican = document.getElementById('teamRepublican');
+                    var startButton = document.getElementById('startButton');
+                    
+                    if (teamDemocrat) {
+                        teamDemocrat.addEventListener('touchend', function(e) {
+                            console.log("Democrat touchend from initial script");
+                            e.preventDefault();
+                            // Trigger a standard click event
+                            teamDemocrat.click();
+                        });
+                    }
+                    
+                    if (teamRepublican) {
+                        teamRepublican.addEventListener('touchend', function(e) {
+                            console.log("Republican touchend from initial script");
+                            e.preventDefault();
+                            // Trigger a standard click event
+                            teamRepublican.click();
+                        });
+                    }
+                    
+                    if (startButton) {
+                        startButton.addEventListener('touchend', function(e) {
+                            console.log("Start button touchend from initial script");
+                            if (!startButton.disabled) {
+                                e.preventDefault();
+                                // Trigger a standard click event
+                                startButton.click();
+                            }
+                        });
+                    }
+                }, 500);
+            }
         });
     </script>
     <style>
@@ -114,18 +154,47 @@
             cursor: pointer;
             transition: all 0.3s ease;
             font-weight: bold;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+        /* Make touch targets bigger on mobile */
+        @media (max-width: 768px) {
+            .team-option {
+                padding: 20px 15px;
+                font-size: 1.1rem;
+            }
+            button {
+                padding: 20px 15px;
+                font-size: 1.3rem;
+                margin-top: 40px;
+            }
+            input[type="text"] {
+                padding: 15px;
+                font-size: 1.1rem;
+            }
         }
         .team-democrat {
             background-color: rgba(59, 89, 152, 0.7);
             border: 2px solid #3b5998;
+            position: relative;
         }
         .team-democrat.selected {
             background-color: #3b5998;
             box-shadow: 0 0 15px rgba(59, 89, 152, 0.8);
         }
+        /* Add a checkmark for selected team */
+        .team-democrat.selected:after,
+        .team-republican.selected:after {
+            content: "✓";
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 1.2rem;
+        }
         .team-republican {
             background-color: rgba(219, 40, 40, 0.7);
             border: 2px solid #db2828;
+            position: relative;
         }
         .team-republican.selected {
             background-color: #db2828;
@@ -143,6 +212,7 @@
             font-size: 1.2rem;
             cursor: pointer;
             transition: background-color 0.3s, transform 0.1s;
+            -webkit-tap-highlight-color: transparent;
         }
         button:hover:not(:disabled) {
             background-color: #45a049;

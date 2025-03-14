@@ -303,6 +303,41 @@ const createTouchControls = () => {
         
         // Log movement flags so we can see which directions are active
         console.log(`[Movement Flags] forward: ${moveForward}, backward: ${moveBackward}, left: ${moveLeft}, right: ${moveRight}`);
+        
+        // On iOS, ensure movement flags trigger immediate camera position updates
+        if (isIOS) {
+            // Apply movement immediately for iOS - this helps with responsiveness
+            // Calculate movement direction based on the flags we just set
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            
+            if (direction.z !== 0 || direction.x !== 0) {
+                direction.normalize();
+                
+                // Get the camera's forward and right vectors
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                
+                // Scale vectors by input
+                forward.multiplyScalar(direction.z);
+                right.multiplyScalar(direction.x);
+                
+                // Combine movement vectors
+                const moveVector = new THREE.Vector3();
+                moveVector.addVectors(forward, right);
+                
+                if (moveVector.length() > 0) {
+                    moveVector.normalize();
+                    
+                    // Apply stronger movement for iOS devices
+                    const iosSpeedMultiplier = 2.5;
+                    moveVector.multiplyScalar(speed * iosSpeedMultiplier);
+                    
+                    // Force camera position update
+                    camera.position.add(moveVector);
+                }
+            }
+        }
     });
     
     // Ensure we reset movement when joystick is released
@@ -404,6 +439,43 @@ if (isTouchDevice) {
                             // Don't stop propagation so nippleJS can handle the event
                         }, { passive: false });
                     });
+                    
+                    // Special handling for left joystick on iOS to ensure movement works
+                    if (element.id === 'leftJoystick') {
+                        element.style.width = '150px';  // Make left joystick bigger
+                        element.style.height = '150px';
+                        
+                        // Add a specialized touch handler to ensure movement on iOS
+                        element.addEventListener('touchmove', function(e) {
+                            if (e.touches && e.touches[0]) {
+                                // Calculate center of the joystick container
+                                const rect = element.getBoundingClientRect();
+                                const centerX = rect.left + rect.width / 2;
+                                const centerY = rect.top + rect.height / 2;
+                                
+                                // Calculate touch position relative to center
+                                const touchX = e.touches[0].clientX - centerX;
+                                const touchY = e.touches[0].clientY - centerY;
+                                
+                                // Normalize to get vector with -1 to 1 range
+                                const maxRadius = rect.width / 2;
+                                let x = touchX / maxRadius;
+                                let y = touchY / maxRadius;
+                                
+                                // Clamp values to -1 to 1 range
+                                x = Math.max(-1, Math.min(1, x));
+                                y = Math.max(-1, Math.min(1, y));
+                                
+                                console.log(`[iOS direct touch] x: ${x.toFixed(2)}, y: ${y.toFixed(2)}`);
+                                
+                                // Set movement flags directly
+                                moveForward = y < -0.1;
+                                moveBackward = y > 0.1;
+                                moveLeft = x < -0.1;
+                                moveRight = x > 0.1;
+                            }
+                        }, { passive: false });
+                    }
                 }
             });
             
@@ -1206,9 +1278,17 @@ function animate() {
             if (moveVector.length() > 0) {
                 moveVector.normalize();
                 
-                // Apply stronger movement for mobile
-                const mobileSpeedMultiplier = isTouchDevice ? 2.0 : 1.0;
-                moveVector.multiplyScalar(speed * mobileSpeedMultiplier);
+                // Apply different movement speed multipliers based on device type
+                let deviceSpeedMultiplier = 1.0;
+                if (isTouchDevice) {
+                    deviceSpeedMultiplier = 2.0;
+                    // Extra boost for iOS devices
+                    if (isIOS) {
+                        deviceSpeedMultiplier = 2.5;
+                    }
+                }
+                
+                moveVector.multiplyScalar(speed * deviceSpeedMultiplier);
                 
                 // Apply movement directly to camera position
                 camera.position.add(moveVector);
