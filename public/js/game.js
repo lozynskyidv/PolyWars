@@ -407,17 +407,22 @@ if (isTouchDevice) {
                 }
             });
             
-            // Enhanced handling for iOS touch events on the document
+            // Enhanced handling for iOS touch events on the document, but only during gameplay
             document.addEventListener('touchstart', function(e) {
-                // Only prevent default when in game mode and not touching UI elements
+                // Only prevent default when in game mode (controls locked) and not touching UI elements
                 if (controls.isLocked) {
-                    const isUIelement = e.target.closest('#startScreen') || 
-                                       e.target.closest('#instructionScreen') ||
-                                       e.target.closest('#shootButton');
+                    const isStartScreen = e.target.closest('#startScreen');
+                    const isUIelement = isStartScreen || 
+                                      e.target.closest('#instructionScreen') ||
+                                      e.target.closest('#shootButton');
                     
+                    // Don't prevent default on start screen to ensure form works
                     if (!isUIelement) {
                         e.preventDefault();
                     }
+                    
+                    // Log what's happening
+                    console.log(`Touch on document - isStartScreen: ${isStartScreen}, prevent: ${!isUIelement}`);
                 }
             }, { passive: false });
             
@@ -1017,6 +1022,7 @@ const startButton = document.getElementById('startButton');
 
 // Team selection
 teamDemocrat.addEventListener('click', () => {
+    console.log("Democrat team selected");
     teamDemocrat.classList.add('selected');
     teamRepublican.classList.remove('selected');
     playerData.team = 'democrats';
@@ -1024,31 +1030,76 @@ teamDemocrat.addEventListener('click', () => {
 });
 
 teamRepublican.addEventListener('click', () => {
+    console.log("Republican team selected");
     teamRepublican.classList.add('selected');
     teamDemocrat.classList.remove('selected');
     playerData.team = 'republicans';
     validateForm();
 });
 
+// Add touchstart handlers for mobile
+if (isTouchDevice) {
+    teamDemocrat.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        console.log("Democrat team touchstart");
+        teamDemocrat.classList.add('selected');
+        teamRepublican.classList.remove('selected');
+        playerData.team = 'democrats';
+        validateForm();
+    });
+
+    teamRepublican.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        console.log("Republican team touchstart");
+        teamRepublican.classList.add('selected');
+        teamDemocrat.classList.remove('selected');
+        playerData.team = 'republicans';
+        validateForm();
+    });
+}
+
 // Name input validation
-playerNameInput.addEventListener('input', validateForm);
+playerNameInput.addEventListener('input', () => {
+    console.log("Name input changed: " + playerNameInput.value);
+    validateForm();
+});
 
 function validateForm() {
     const name = playerNameInput.value.trim();
     const team = playerData.team;
     
+    console.log(`Validating form - Name: "${name}" (${name.length} chars), Team: ${team}`);
+    
     // Enable button if both name and team are selected
     if (name.length >= 2 && team) {
+        console.log("Form valid - enabling button");
         startButton.disabled = false;
+        startButton.style.backgroundColor = "#4CAF50";
+        startButton.style.cursor = "pointer";
     } else {
+        console.log("Form invalid - disabling button");
         startButton.disabled = true;
+        startButton.style.backgroundColor = "#cccccc";
+        startButton.style.cursor = "not-allowed";
     }
 }
 
 // Start game when form is submitted
 startButton.addEventListener('click', startGame);
 
+// Add touchstart handler for the start button on mobile
+if (isTouchDevice) {
+    startButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        console.log("Start button touchstart");
+        if (!startButton.disabled) {
+            startGame();
+        }
+    });
+}
+
 function startGame() {
+    console.log("startGame function called");
     // Save player data
     playerData.name = playerNameInput.value.trim();
     
@@ -1220,6 +1271,66 @@ function onWindowResize() {
         checkOrientation();
     }
 }
+
+// Ensure login form is properly initialized
+window.addEventListener('load', function() {
+    console.log("Window loaded - initializing login form");
+    
+    // Make sure player data is reset
+    playerData = {
+        name: '',
+        team: '',
+        color: null
+    };
+    
+    // Reset team selection
+    teamDemocrat.classList.remove('selected');
+    teamRepublican.classList.remove('selected');
+    
+    // Clear name input and focus it
+    if (playerNameInput) {
+        playerNameInput.value = '';
+        
+        // Only try to focus on desktop - can cause issues on mobile
+        if (!isTouchDevice) {
+            setTimeout(() => {
+                playerNameInput.focus();
+            }, 500);
+        }
+    }
+    
+    // Force validation to update button state
+    validateForm();
+    
+    // Add special handling for iOS devices
+    if (isIOS) {
+        console.log("Adding iOS-specific form handlers");
+        
+        // Add touchstart handler for start button to make it more responsive
+        if (startButton) {
+            startButton.style.webkitTapHighlightColor = 'rgba(0,0,0,0)';
+            startButton.addEventListener('touchstart', function(e) {
+                if (!startButton.disabled) {
+                    e.preventDefault();
+                    // Visual feedback
+                    this.style.backgroundColor = '#45a049';
+                    setTimeout(() => {
+                        startGame();
+                    }, 50);
+                }
+            }, false);
+        }
+        
+        // Add touchstart handlers for team options with visual feedback
+        [teamDemocrat, teamRepublican].forEach(elem => {
+            if (elem) {
+                elem.style.webkitTapHighlightColor = 'rgba(0,0,0,0)';
+            }
+        });
+    }
+    
+    console.log("Login form initialized");
+});
 
 // Start the animation
 animate(); 

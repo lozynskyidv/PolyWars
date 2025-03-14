@@ -142,14 +142,19 @@
             border-radius: 5px;
             font-size: 1.2rem;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, transform 0.1s;
         }
-        button:hover {
+        button:hover:not(:disabled) {
             background-color: #45a049;
+            transform: scale(1.02);
+        }
+        button:active:not(:disabled) {
+            transform: scale(0.98);
         }
         button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
+            opacity: 0.8;
         }
     </style>
 </head>
