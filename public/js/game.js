@@ -559,6 +559,43 @@ if (isTouchDevice) {
                             e.preventDefault();
                         }, { passive: false });
                     });
+                    
+                    // Special handling for left joystick on Android to ensure movement works
+                    if (element.id === 'leftJoystick') {
+                        element.style.width = '150px';  // Make left joystick bigger
+                        element.style.height = '150px';
+                        
+                        // Add a specialized touch handler to ensure movement on Android
+                        element.addEventListener('touchmove', function(e) {
+                            if (e.touches && e.touches[0]) {
+                                // Calculate center of the joystick container
+                                const rect = element.getBoundingClientRect();
+                                const centerX = rect.left + rect.width / 2;
+                                const centerY = rect.top + rect.height / 2;
+                                
+                                // Calculate touch position relative to center
+                                const touchX = e.touches[0].clientX - centerX;
+                                const touchY = e.touches[0].clientY - centerY;
+                                
+                                // Normalize to get vector with -1 to 1 range
+                                const maxRadius = rect.width / 2;
+                                let x = touchX / maxRadius;
+                                let y = touchY / maxRadius;
+                                
+                                // Clamp values to -1 to 1 range
+                                x = Math.max(-1, Math.min(1, x));
+                                y = Math.max(-1, Math.min(1, y));
+                                
+                                console.log(`[Android direct touch] x: ${x.toFixed(2)}, y: ${y.toFixed(2)}`);
+                                
+                                // Set movement flags directly
+                                moveForward = y < -0.1;
+                                moveBackward = y > 0.1;
+                                moveLeft = x < -0.1;
+                                moveRight = x > 0.1;
+                            }
+                        }, { passive: false });
+                    }
                 }
             });
             
@@ -1524,6 +1561,10 @@ function animate() {
                     deviceSpeedMultiplier = 2.0;
                     // Extra boost for iOS devices
                     if (isIOS) {
+                        deviceSpeedMultiplier = 2.5;
+                    }
+                    // Extra boost for Android devices
+                    else if (isAndroid) {
                         deviceSpeedMultiplier = 2.5;
                     }
                 }
