@@ -4,7 +4,27 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
 // Connect to Socket.IO server with configuration
-const socket = io(CONFIG.SERVER_URL);
+let socket;
+try {
+    console.log("Attempting to connect to Socket.IO server at:", CONFIG.SERVER_URL);
+    socket = io(CONFIG.SERVER_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 10
+    });
+    
+    console.log("Socket.IO connection initialized");
+    
+    // Setup socket connection error handling
+    socket.on('connect_error', (error) => {
+        console.error("Socket.IO connection error:", error);
+        alert("Failed to connect to game server. Please try again later.");
+    });
+} catch (error) {
+    console.error("Error initializing Socket.IO:", error);
+    alert("Failed to initialize game connection. Please try again later.");
+}
 
 // Player data
 let playerData = {

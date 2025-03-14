@@ -1,7 +1,23 @@
 [build]
   publish = "public"
+  functions = "netlify/functions"
   
+[[redirects]]
+  from = "/socket.io/*"
+  to = "/.netlify/functions/socketio-server/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
-  status = 200 
+  status = 200
+  
+[dev]
+  framework = "#custom"
+  command = "npm run dev"
+  
+[[headers]]
+  for = "/*"
+    [headers.values]
+    Access-Control-Allow-Origin = "*" 
