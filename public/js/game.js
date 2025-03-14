@@ -66,6 +66,9 @@ const MAX_SYNC_RETRIES = 3;
 let syncSuccess = false;
 let initialSyncComplete = false;
 
+// Store joystick input for mobile movement
+let joystickInputVector = {x: 0, y: 0};
+
 // Initialize scene, camera, and renderer
 const scene = new THREE.Scene();
 // Add a blue sky background
@@ -226,7 +229,9 @@ const createTouchControls = () => {
         leftJoystickContainer.style.width = '120px';
         leftJoystickContainer.style.height = '120px';
         leftJoystickContainer.style.pointerEvents = 'auto';
-        leftJoystickContainer.style.backgroundColor = 'rgba(255,255,255,0.2)'; // Make it more visible
+        leftJoystickContainer.style.backgroundColor = 'rgba(255,255,255,0.3)'; // Make it more visible
+        leftJoystickContainer.style.borderRadius = '50%'; // Make it round
+        leftJoystickContainer.style.border = '2px solid rgba(255,255,255,0.6)'; // Add border
         leftJoystickContainer.id = 'leftJoystick';
         touchControls.appendChild(leftJoystickContainer);
         
@@ -238,6 +243,9 @@ const createTouchControls = () => {
         rightJoystickContainer.style.width = '120px';
         rightJoystickContainer.style.height = '120px';
         rightJoystickContainer.style.pointerEvents = 'auto';
+        rightJoystickContainer.style.backgroundColor = 'rgba(255,255,255,0.3)'; // Make it more visible
+        rightJoystickContainer.style.borderRadius = '50%'; // Make it round
+        rightJoystickContainer.style.border = '2px solid rgba(255,255,255,0.6)'; // Add border
         rightJoystickContainer.id = 'rightJoystick';
         touchControls.appendChild(rightJoystickContainer);
         
@@ -298,35 +306,48 @@ const createTouchControls = () => {
         
         // Setup left joystick for movement
         leftJoystick.on('move', function(evt, data) {
-            // Calculate normalized direction vector
-            const angle = data.angle.radian;
-            const force = Math.min(data.force, 1);  // Cap force at 1
-            
-            // Convert polar to cartesian coordinates (x right+, y forward+)
-            // Note: Add PI/2 to angle because nippleJS uses 0° = right, 90° = down
-            // but we want 0° = down, 90° = right for typical game controls
-            const x = Math.cos(angle) * force;
-            const y = Math.sin(angle) * force;
-            
-            console.log(`Left joystick: angle=${(angle * 180 / Math.PI).toFixed(0)}°, force=${force.toFixed(2)}, x=${x.toFixed(2)}, y=${y.toFixed(2)}`);
-            
-            // Set movement flags based on direction
-            moveForward = y < -0.3;  // Changed from y < 0
-            moveBackward = y > 0.3;  // Changed from y > 0
-            moveLeft = x < -0.3;     // Changed from x < 0
-            moveRight = x > 0.3;     // Changed from x > 0
-            
-            // Force an immediate position update to ensure sync
-            if (controls.isLocked && playerMesh) {
-                sendPositionUpdate(true);
+            try {
+                // Calculate normalized direction vector
+                const angle = data.angle.radian;
+                const force = Math.min(data.force, 1);  // Cap force at 1
+                
+                // Convert polar to cartesian coordinates
+                // Note: NippleJS treats 0° as right, and goes clockwise
+                const x = Math.cos(angle) * force;
+                const y = Math.sin(angle) * force;
+                
+                console.log(`Left joystick: angle=${(angle * 180 / Math.PI).toFixed(0)}°, force=${force.toFixed(2)}, x=${x.toFixed(2)}, y=${y.toFixed(2)}`);
+                
+                // Set movement flags based on direction - reduce threshold for more sensitivity
+                moveForward = y < -0.2;  // Up direction
+                moveBackward = y > 0.2;  // Down direction
+                moveLeft = x < -0.2;     // Left direction
+                moveRight = x > 0.2;     // Right direction
+                
+                // Override camera direction for direct movement on mobile
+                // This stores the joystick input for use in the animate loop
+                joystickInputVector = {x: x, y: y};
+                
+                // Force an immediate position update to ensure sync
+                if (controls.isLocked && playerMesh) {
+                    sendPositionUpdate(true);
+                }
+            } catch (error) {
+                console.error('Error in left joystick move handler:', error);
             }
         });
         
         leftJoystick.on('end', function() {
+            // Reset all movement flags when joystick is released
             moveForward = false;
             moveBackward = false;
             moveLeft = false;
             moveRight = false;
+            
+            // Reset joystick input vector
+            joystickInputVector = {x: 0, y: 0};
+            
+            console.log('Left joystick released, stopping movement');
             
             // Force an immediate position update to ensure sync
             if (controls.isLocked && playerMesh) {
@@ -1090,501 +1111,4 @@ socket.on('currentPlayers', function(players) {
             console.log(`Adding player ${id} at position:`,
                 `x=${players[id].position.x.toFixed(2)}, ` +
                 `y=${players[id].position.y.toFixed(2)}, ` +
-                `z=${players[id].position.z.toFixed(2)}`
-            );
-            addOtherPlayer(players[id]);
-        }
-    });
-});
-
-socket.on('newPlayer', function(playerInfo) {
-    console.log('New player joined:', playerInfo);
-    console.log(`Player position: x=${playerInfo.position.x.toFixed(2)}, y=${playerInfo.position.y.toFixed(2)}, z=${playerInfo.position.z.toFixed(2)}`);
-    addOtherPlayer(playerInfo);
-});
-
-socket.on('playerMoved', function(moveData) {
-    if (otherPlayers[moveData.id]) {
-        if (POSITION_SYNC_DEBUG) {
-            console.log(`[RECEIVED] Player ${moveData.id}${moveData.isMobile ? ' (mobile)' : ''} moved to: x=${moveData.position.x.toFixed(2)}, y=${moveData.position.y.toFixed(2)}, z=${moveData.position.z.toFixed(2)}`);
-        }
-        
-        // Store mobile flag for this player if provided
-        if (moveData.isMobile !== undefined) {
-            otherPlayers[moveData.id].userData = otherPlayers[moveData.id].userData || {};
-            otherPlayers[moveData.id].userData.isMobile = moveData.isMobile;
-        }
-        
-        // Update position and rotation for all players
-        otherPlayers[moveData.id].position.set(
-            moveData.position.x,
-            moveData.position.y,
-            moveData.position.z
-        );
-        otherPlayers[moveData.id].rotation.set(
-            moveData.rotation.x,
-            moveData.rotation.y,
-            moveData.rotation.z
-        );
-        
-        // Add extra logging for mobile player movements to help debugging
-        if (moveData.isMobile) {
-            console.log(`Mobile player ${moveData.id} position updated: x=${moveData.position.x.toFixed(2)}, y=${moveData.position.y.toFixed(2)}, z=${moveData.position.z.toFixed(2)}`);
-        }
-    } else {
-        console.warn(`Received position update for unknown player: ${moveData.id}`);
-    }
-});
-
-socket.on('playerDisconnected', function(playerId) {
-    console.log('Player disconnected:', playerId);
-    removePlayer(playerId);
-});
-
-socket.on('serverFull', function() {
-    alert('Server is full (maximum 16 players). Please try again later.');
-});
-
-// Handle projectile events
-socket.on('newProjectile', function(projectileInfo) {
-    createProjectile(projectileInfo);
-});
-
-socket.on('removeProjectile', function(projectileId) {
-    removeProjectile(projectileId);
-});
-
-socket.on('currentProjectiles', function(currentProjectiles) {
-    // Add all existing projectiles
-    Object.keys(currentProjectiles).forEach(function(id) {
-        createProjectile(currentProjectiles[id]);
-    });
-});
-
-// Start screen functionality
-const startScreen = document.getElementById('startScreen');
-const playerNameInput = document.getElementById('playerName');
-const teamDemocrat = document.getElementById('teamDemocrat');
-const teamRepublican = document.getElementById('teamRepublican');
-const startButton = document.getElementById('startButton');
-
-// Team selection
-teamDemocrat.addEventListener('click', () => {
-    console.log("Democrat team selected");
-    teamDemocrat.classList.add('selected');
-    teamRepublican.classList.remove('selected');
-    playerData.team = 'democrats';
-    validateForm();
-});
-
-teamRepublican.addEventListener('click', () => {
-    console.log("Republican team selected");
-    teamRepublican.classList.add('selected');
-    teamDemocrat.classList.remove('selected');
-    playerData.team = 'republicans';
-    validateForm();
-});
-
-// Add touchstart handlers for mobile
-if (isTouchDevice) {
-    teamDemocrat.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        console.log("Democrat team touchstart");
-        teamDemocrat.classList.add('selected');
-        teamRepublican.classList.remove('selected');
-        playerData.team = 'democrats';
-        validateForm();
-    });
-
-    teamRepublican.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        console.log("Republican team touchstart");
-        teamRepublican.classList.add('selected');
-        teamDemocrat.classList.remove('selected');
-        playerData.team = 'republicans';
-        validateForm();
-    });
-}
-
-// Name input validation
-playerNameInput.addEventListener('input', () => {
-    console.log("Name input changed: " + playerNameInput.value);
-    validateForm();
-});
-
-function validateForm() {
-    const name = playerNameInput.value.trim();
-    const team = playerData.team;
-    
-    console.log(`Validating form - Name: "${name}" (${name.length} chars), Team: ${team}`);
-    
-    // Enable button if both name and team are selected
-    if (name.length >= 2 && team) {
-        console.log("Form valid - enabling button");
-        startButton.disabled = false;
-        startButton.style.backgroundColor = "#4CAF50";
-        startButton.style.cursor = "pointer";
-    } else {
-        console.log("Form invalid - disabling button");
-        startButton.disabled = true;
-        startButton.style.backgroundColor = "#cccccc";
-        startButton.style.cursor = "not-allowed";
-    }
-}
-
-// Start game when form is submitted
-startButton.addEventListener('click', startGame);
-
-// Add touchstart handler for the start button on mobile
-if (isTouchDevice) {
-    startButton.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        console.log("Start button touchstart");
-        if (!startButton.disabled) {
-            startGame();
-        }
-    });
-}
-
-function startGame() {
-    console.log("startGame function called");
-    // Save player data
-    playerData.name = playerNameInput.value.trim();
-    
-    // Reset sync variables
-    syncAttempts = 0;
-    syncSuccess = false;
-    initialSyncComplete = false;
-    
-    // Hide start screen
-    startScreen.style.display = 'none';
-    
-    // Show loading screen
-    loadingScreen.style.display = 'flex';
-    
-    // Create player marker
-    createPlayerMarker();
-    
-    // Load the map
-    loadMap();
-    
-    // Show instructions after hiding the start screen
-    instructions.style.display = 'block';
-    
-    // Set initial position (this will be sent to server when joining)
-    camera.position.set(0, 1.6, 0); // Reset to spawn point
-    
-    // Join the game via Socket.IO - include the initial position
-    socket.emit('joinGame', {
-        name: playerData.name,
-        team: playerData.team,
-        position: {
-            x: camera.position.x,
-            y: camera.position.y,
-            z: camera.position.z
-        },
-        rotation: {
-            x: camera.rotation.x,
-            y: camera.rotation.y,
-            z: camera.rotation.z
-        },
-        isMobile: isTouchDevice
-    });
-    
-    // Check orientation if on mobile
-    if (isTouchDevice) {
-        checkOrientation();
-    }
-    
-    console.log('Game started with player:', playerData);
-    
-    // Setup a sequence of forced position updates to ensure initial sync
-    const syncSchedule = [500, 1000, 2000, 3000, 5000]; // Send updates at these intervals (ms)
-    
-    syncSchedule.forEach(delay => {
-        setTimeout(() => {
-            if (controls.isLocked && playerMesh) {
-                sendPositionUpdate(true, true); // Force sync with log
-                console.log(`[SYNC] Sent scheduled position update after ${delay}ms`);
-            }
-        }, delay);
-    });
-}
-
-// Load the map
-const loader = new GLTFLoader();
-let map;
-
-function loadMap() {
-    loader.load(
-        // Resource URL
-        '/assets/map.glb',
-        // Called when resource is loaded
-        function (gltf) {
-            map = gltf.scene;
-            scene.add(map);
-            
-            // Optionally adjust map position
-            map.position.set(0, 0, 0);
-            
-            // Make the map cast and receive shadows
-            map.traverse((node) => {
-                if (node.isMesh) {
-                    node.castShadow = true;
-                    node.receiveShadow = true;
-                }
-            });
-            
-            console.log('Map loaded successfully');
-            
-            // Hide loading screen
-            loadingScreen.style.display = 'none';
-        },
-        // Called when loading is in progress
-        function (xhr) {
-            const percent = Math.round((xhr.loaded / xhr.total) * 100);
-            loadingText.textContent = `Loading map: ${percent}%`;
-            progressBar.style.width = `${percent}%`;
-            console.log(`${percent}% loaded`);
-        },
-        // Called when loading has errors
-        function (error) {
-            console.error('An error happened while loading the map:', error);
-            loadingText.textContent = 'Error loading map. Please refresh to try again.';
-            loadingText.style.color = 'red';
-        }
-    );
-}
-
-// Function to send position update to server
-function sendPositionUpdate(forceSync = false, forceLog = false) {
-    const newPosition = {
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z
-    };
-    const newRotation = {
-        x: camera.rotation.x,
-        y: camera.rotation.y, 
-        z: camera.rotation.z
-    };
-    
-    // Only send if position/rotation changed or force sync is requested
-    const positionChanged = !lastSentPosition || 
-        Math.abs(lastSentPosition.x - newPosition.x) > 0.01 || 
-        Math.abs(lastSentPosition.y - newPosition.y) > 0.01 || 
-        Math.abs(lastSentPosition.z - newPosition.z) > 0.01;
-    
-    // For mobile devices, always send updates to ensure cross-platform visibility
-    const shouldSync = forceSync || positionChanged || isTouchDevice;
-        
-    if (shouldSync) {
-        // Store last sent position for comparison
-        lastSentPosition = { ...newPosition };
-        
-        // Debug log for position updates
-        if ((forceSync || forceLog || POSITION_SYNC_DEBUG) && (positionChanged || isTouchDevice)) {
-            console.log(`[SYNC${forceSync ? '-FORCE' : ''}${isTouchDevice ? '-MOBILE' : ''}] Sending position: x=${newPosition.x.toFixed(2)}, y=${newPosition.y.toFixed(2)}, z=${newPosition.z.toFixed(2)}`);
-        }
-        
-        // Send position update with device type
-        socket.emit('updatePlayer', {
-            position: newPosition,
-            rotation: newRotation,
-            isMobile: isTouchDevice // Always include the mobile flag
-        });
-        
-        // Mark the time of the update
-        lastPositionUpdate = Date.now();
-        
-        // Increment sync attempts counter
-        syncAttempts++;
-        
-        // After a few sync attempts, mark sync as complete
-        if (syncAttempts >= MAX_SYNC_RETRIES && !initialSyncComplete) {
-            initialSyncComplete = true;
-            console.log(`[SYNC] Initial sync sequence complete after ${syncAttempts} attempts`);
-        }
-        
-        return true;
-    }
-    
-    return false;
-}
-
-// Animation loop
-function animate() {
-    requestAnimationFrame(animate);
-    
-    // Only update controls if locked (user is playing)
-    if (controls.isLocked) {
-        // Calculate movement direction based on keyboard or joystick input
-        direction.z = Number(moveForward) - Number(moveBackward);
-        direction.x = Number(moveRight) - Number(moveLeft);
-        
-        // Debug movement direction vector only when moving
-        if (direction.z !== 0 || direction.x !== 0) {
-            // Normalize only if there's actual movement
-            direction.normalize();
-            
-            // Get the camera's forward and right vectors
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-            
-            // Scale vectors by input
-            forward.multiplyScalar(direction.z);
-            right.multiplyScalar(direction.x);
-            
-            // Combine movement vectors
-            const moveVector = new THREE.Vector3();
-            moveVector.addVectors(forward, right);
-            
-            // Only normalize if there's movement
-            if (moveVector.length() > 0) {
-                moveVector.normalize();
-                
-                // Apply different movement speed multipliers based on device type
-                let deviceSpeedMultiplier = 1.0;
-                if (isTouchDevice) {
-                    deviceSpeedMultiplier = 2.0;
-                    // Extra boost for iOS devices
-                    if (isIOS) {
-                        deviceSpeedMultiplier = 2.5;
-                    }
-                }
-                
-                moveVector.multiplyScalar(speed * deviceSpeedMultiplier);
-                
-                // Apply movement directly to camera position
-                camera.position.add(moveVector);
-                
-                // After movement, always sync position immediately
-                if (playerMesh) {
-                    sendPositionUpdate(true);
-                }
-            }
-        }
-        
-        // Update player mesh position to match camera
-        if (playerMesh) {
-            playerMesh.position.copy(camera.position);
-            // Rotate to match camera direction
-            playerMesh.rotation.y = camera.rotation.y;
-            
-            // Hide the player's own model from themselves in first person view
-            if (playerModel) {
-                playerModel.visible = false;
-            }
-            
-            // Send position updates based on device type and movement
-            if (isTouchDevice) {
-                // Mobile: Always send updates on every frame to ensure cross-platform visibility
-                sendPositionUpdate(true, false);
-            } else {
-                // Desktop: Send updates periodically or when moved
-                forceSyncCounter++;
-                let forceSync = forceSyncCounter >= FORCE_SYNC_INTERVAL;
-                if (forceSync) {
-                    forceSyncCounter = 0;
-                    sendPositionUpdate(true);
-                } else {
-                    // Send updates based on time interval
-                    const timeSinceLastUpdate = Date.now() - lastPositionUpdate;
-                    if (timeSinceLastUpdate > positionUpdateInterval) {
-                        sendPositionUpdate(false);
-                    }
-                }
-            }
-        }
-    }
-    
-    // Update projectile positions
-    Object.keys(projectiles).forEach(id => {
-        const projectile = projectiles[id];
-        if (projectile && projectile.mesh) {
-            // Move projectile according to its velocity
-            projectile.mesh.position.x += projectile.velocity.x;
-            projectile.mesh.position.y += projectile.velocity.y;
-            projectile.mesh.position.z += projectile.velocity.z;
-        }
-    });
-    
-    renderer.render(scene, camera);
-}
-
-// Handle window resize
-window.addEventListener('resize', onWindowResize, false);
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    
-    // Check orientation on resize if on mobile
-    if (isTouchDevice) {
-        checkOrientation();
-    }
-}
-
-// Ensure login form is properly initialized
-window.addEventListener('load', function() {
-    console.log("Window loaded - initializing login form");
-    
-    // Make sure player data is reset
-    playerData = {
-        name: '',
-        team: '',
-        color: null
-    };
-    
-    // Reset team selection
-    teamDemocrat.classList.remove('selected');
-    teamRepublican.classList.remove('selected');
-    
-    // Clear name input and focus it
-    if (playerNameInput) {
-        playerNameInput.value = '';
-        
-        // Only try to focus on desktop - can cause issues on mobile
-        if (!isTouchDevice) {
-            setTimeout(() => {
-                playerNameInput.focus();
-            }, 500);
-        }
-    }
-    
-    // Force validation to update button state
-    validateForm();
-    
-    // Add special handling for iOS devices
-    if (isIOS) {
-        console.log("Adding iOS-specific form handlers");
-        
-        // Add touchstart handler for start button to make it more responsive
-        if (startButton) {
-            startButton.style.webkitTapHighlightColor = 'rgba(0,0,0,0)';
-            startButton.addEventListener('touchstart', function(e) {
-                if (!startButton.disabled) {
-                    e.preventDefault();
-                    // Visual feedback
-                    this.style.backgroundColor = '#45a049';
-                    setTimeout(() => {
-                        startGame();
-                    }, 50);
-                }
-            }, false);
-        }
-        
-        // Add touchstart handlers for team options with visual feedback
-        [teamDemocrat, teamRepublican].forEach(elem => {
-            if (elem) {
-                elem.style.webkitTapHighlightColor = 'rgba(0,0,0,0)';
-            }
-        });
-    }
-    
-    console.log("Login form initialized");
-});
-
-// Start the animation
-animate(); 
+                `
