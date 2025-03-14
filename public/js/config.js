@@ -4,5 +4,5 @@ const CONFIG = {
   // In development, it will connect to localhost
   SERVER_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
     ? `http://${window.location.hostname}:3001` 
-    : 'https://your-heroku-app-name.herokuapp.com'
+    : 'https://polywars-6d2a9df068d1.herokuapp.com'
 }; 
