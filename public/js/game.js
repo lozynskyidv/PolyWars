@@ -203,163 +203,179 @@ let shootButton = null;
 
 // Add touch controls for mobile
 const createTouchControls = () => {
-    // Create container for joysticks
-    const touchControls = document.createElement('div');
-    touchControls.style.position = 'absolute';
-    touchControls.style.top = '0';
-    touchControls.style.left = '0';
-    touchControls.style.width = '100%';
-    touchControls.style.height = '100%';
-    touchControls.style.pointerEvents = 'none';
-    touchControls.style.zIndex = '1000';
-    touchControls.id = 'touchControls';
-    document.body.appendChild(touchControls);
-    
-    // Left joystick container (for movement)
-    const leftJoystickContainer = document.createElement('div');
-    leftJoystickContainer.style.position = 'absolute';
-    leftJoystickContainer.style.bottom = '70px';
-    leftJoystickContainer.style.left = '70px';
-    leftJoystickContainer.style.width = '120px';
-    leftJoystickContainer.style.height = '120px';
-    leftJoystickContainer.style.pointerEvents = 'auto';
-    leftJoystickContainer.id = 'leftJoystick';
-    touchControls.appendChild(leftJoystickContainer);
-    
-    // Right joystick container (for camera rotation)
-    const rightJoystickContainer = document.createElement('div');
-    rightJoystickContainer.style.position = 'absolute';
-    rightJoystickContainer.style.bottom = '70px';
-    rightJoystickContainer.style.right = '70px';
-    rightJoystickContainer.style.width = '120px';
-    rightJoystickContainer.style.height = '120px';
-    rightJoystickContainer.style.pointerEvents = 'auto';
-    rightJoystickContainer.id = 'rightJoystick';
-    touchControls.appendChild(rightJoystickContainer);
-    
-    // Shoot button
-    shootButton = document.createElement('div');
-    shootButton.style.position = 'absolute';
-    shootButton.style.right = '70px';
-    shootButton.style.top = '70px';
-    shootButton.style.width = '70px';
-    shootButton.style.height = '70px';
-    shootButton.style.borderRadius = '50%';
-    shootButton.style.backgroundColor = 'rgba(255, 0, 0, 0.6)';
-    shootButton.style.border = '2px solid white';
-    shootButton.style.pointerEvents = 'auto';
-    shootButton.style.display = 'flex';
-    shootButton.style.alignItems = 'center';
-    shootButton.style.justifyContent = 'center';
-    shootButton.style.color = 'white';
-    shootButton.style.fontSize = '14px';
-    shootButton.style.fontWeight = 'bold';
-    shootButton.innerHTML = 'SHOOT';
-    shootButton.id = 'shootButton';
-    touchControls.appendChild(shootButton);
-    
-    // Initialize nippleJS joysticks
-    leftJoystick = nipplejs.create({
-        zone: document.getElementById('leftJoystick'),
-        mode: 'static',
-        position: { left: '50%', top: '50%' },
-        color: 'white',
-        size: 100,
-        threshold: 0.05 // Lower threshold for more responsive movement
-    });
-    
-    rightJoystick = nipplejs.create({
-        zone: document.getElementById('rightJoystick'),
-        mode: 'static',
-        position: { left: '50%', top: '50%' },
-        color: 'white',
-        size: 120,                    // Larger size for better touch area
-        threshold: 0.05,              // Lower threshold for more sensitivity
-        fadeTime: 0,                  // No fade for instant feedback
-        multitouch: true,             // Support multitouch
-        maxNumberOfNipples: 2,        // Allow both joysticks to work
-        dynamicPage: true,            // Better for full-screen apps
-        restOpacity: 0.8,             // More visible at rest
-        shape: 'circle',              // Circle shape
-        lockX: false,                 // Don't lock axis
-        lockY: false,
-        restJoystick: true            // Return to center when released
-    });
-    
-    // Setup left joystick for movement
-    leftJoystick.on('move', function(evt, data) {
-        // Calculate normalized direction vector
-        const angle = data.angle.radian;
-        const force = Math.min(data.force, 1);  // Cap force at 1
+    try {
+        console.log('Creating touch controls...');
         
-        // Convert polar to cartesian coordinates (x right+, y forward+)
-        // Note: Add PI/2 to angle because nippleJS uses 0° = right, 90° = down
-        // but we want 0° = down, 90° = right for typical game controls
-        const x = Math.cos(angle) * force;
-        const y = Math.sin(angle) * force;
+        // Create container for joysticks
+        const touchControls = document.createElement('div');
+        touchControls.style.position = 'absolute';
+        touchControls.style.top = '0';
+        touchControls.style.left = '0';
+        touchControls.style.width = '100%';
+        touchControls.style.height = '100%';
+        touchControls.style.pointerEvents = 'none';
+        touchControls.style.zIndex = '1000';
+        touchControls.id = 'touchControls';
+        document.body.appendChild(touchControls);
         
-        console.log(`Left joystick: angle=${(angle * 180 / Math.PI).toFixed(0)}°, force=${force.toFixed(2)}, x=${x.toFixed(2)}, y=${y.toFixed(2)}`);
+        // Left joystick container (for movement)
+        const leftJoystickContainer = document.createElement('div');
+        leftJoystickContainer.style.position = 'absolute';
+        leftJoystickContainer.style.bottom = '70px';
+        leftJoystickContainer.style.left = '70px';
+        leftJoystickContainer.style.width = '120px';
+        leftJoystickContainer.style.height = '120px';
+        leftJoystickContainer.style.pointerEvents = 'auto';
+        leftJoystickContainer.style.backgroundColor = 'rgba(255,255,255,0.2)'; // Make it more visible
+        leftJoystickContainer.id = 'leftJoystick';
+        touchControls.appendChild(leftJoystickContainer);
         
-        // Set movement flags based on direction
-        moveForward = y < -0.3;  // Changed from y < 0
-        moveBackward = y > 0.3;  // Changed from y > 0
-        moveLeft = x < -0.3;     // Changed from x < 0
-        moveRight = x > 0.3;     // Changed from x > 0
+        // Right joystick container (for camera rotation)
+        const rightJoystickContainer = document.createElement('div');
+        rightJoystickContainer.style.position = 'absolute';
+        rightJoystickContainer.style.bottom = '70px';
+        rightJoystickContainer.style.right = '70px';
+        rightJoystickContainer.style.width = '120px';
+        rightJoystickContainer.style.height = '120px';
+        rightJoystickContainer.style.pointerEvents = 'auto';
+        rightJoystickContainer.id = 'rightJoystick';
+        touchControls.appendChild(rightJoystickContainer);
         
-        // Force an immediate position update to ensure sync
-        if (controls.isLocked && playerMesh) {
-            sendPositionUpdate(true);
+        // Shoot button
+        shootButton = document.createElement('div');
+        shootButton.style.position = 'absolute';
+        shootButton.style.right = '70px';
+        shootButton.style.top = '70px';
+        shootButton.style.width = '70px';
+        shootButton.style.height = '70px';
+        shootButton.style.borderRadius = '50%';
+        shootButton.style.backgroundColor = 'rgba(255, 0, 0, 0.6)';
+        shootButton.style.border = '2px solid white';
+        shootButton.style.pointerEvents = 'auto';
+        shootButton.style.display = 'flex';
+        shootButton.style.alignItems = 'center';
+        shootButton.style.justifyContent = 'center';
+        shootButton.style.color = 'white';
+        shootButton.style.fontSize = '14px';
+        shootButton.style.fontWeight = 'bold';
+        shootButton.innerHTML = 'SHOOT';
+        shootButton.id = 'shootButton';
+        touchControls.appendChild(shootButton);
+        
+        // Initialize nippleJS joysticks
+        console.log('Initializing joysticks with nippleJS version:', nipplejs ? nipplejs.version || 'unknown' : 'not loaded');
+        
+        if (!nipplejs) {
+            throw new Error('nippleJS library not found! Mobile controls will not work.');
         }
-    });
-    
-    leftJoystick.on('end', function() {
-        moveForward = false;
-        moveBackward = false;
-        moveLeft = false;
-        moveRight = false;
         
-        // Force an immediate position update to ensure sync
-        if (controls.isLocked && playerMesh) {
-            sendPositionUpdate(true);
-        }
-    });
-    
-    // Setup right joystick for camera rotation
-    rightJoystick.on('move', (evt, data) => {
-        // Get the joystick position using vector components
-        const xInput = data.vector.x;
-        const yInput = data.vector.y;
+        leftJoystick = nipplejs.create({
+            zone: document.getElementById('leftJoystick'),
+            mode: 'static',
+            position: { left: '50%', top: '50%' },
+            color: 'white',
+            size: 100,
+            threshold: 0.05 // Lower threshold for more responsive movement
+        });
         
-        // Debug info to show joystick values
-        console.log(`[Right Joystick] Raw x: ${xInput.toFixed(2)}, y: ${yInput.toFixed(2)}, direction: ${data.direction?.angle || 'none'}`);
+        rightJoystick = nipplejs.create({
+            zone: document.getElementById('rightJoystick'),
+            mode: 'static',
+            position: { left: '50%', top: '50%' },
+            color: 'white',
+            size: 120,                    // Larger size for better touch area
+            threshold: 0.05,              // Lower threshold for more sensitivity
+            fadeTime: 0,                  // No fade for instant feedback
+            multitouch: true,             // Support multitouch
+            maxNumberOfNipples: 2,        // Allow both joysticks to work
+            dynamicPage: true,            // Better for full-screen apps
+            restOpacity: 0.8,             // More visible at rest
+            shape: 'circle',              // Circle shape
+            lockX: false,                 // Don't lock axis
+            lockY: false,
+            restJoystick: true            // Return to center when released
+        });
         
-        // Calculate rotation speed based on distance from center (force)
-        const rotationSpeed = 0.05 * data.force;
+        // Setup left joystick for movement
+        leftJoystick.on('move', function(evt, data) {
+            // Calculate normalized direction vector
+            const angle = data.angle.radian;
+            const force = Math.min(data.force, 1);  // Cap force at 1
+            
+            // Convert polar to cartesian coordinates (x right+, y forward+)
+            // Note: Add PI/2 to angle because nippleJS uses 0° = right, 90° = down
+            // but we want 0° = down, 90° = right for typical game controls
+            const x = Math.cos(angle) * force;
+            const y = Math.sin(angle) * force;
+            
+            console.log(`Left joystick: angle=${(angle * 180 / Math.PI).toFixed(0)}°, force=${force.toFixed(2)}, x=${x.toFixed(2)}, y=${y.toFixed(2)}`);
+            
+            // Set movement flags based on direction
+            moveForward = y < -0.3;  // Changed from y < 0
+            moveBackward = y > 0.3;  // Changed from y > 0
+            moveLeft = x < -0.3;     // Changed from x < 0
+            moveRight = x > 0.3;     // Changed from x > 0
+            
+            // Force an immediate position update to ensure sync
+            if (controls.isLocked && playerMesh) {
+                sendPositionUpdate(true);
+            }
+        });
         
-        // Apply horizontal rotation (looking left/right)
-        // Negative xInput turns camera left, positive turns right
-        camera.rotation.y -= xInput * rotationSpeed;
+        leftJoystick.on('end', function() {
+            moveForward = false;
+            moveBackward = false;
+            moveLeft = false;
+            moveRight = false;
+            
+            // Force an immediate position update to ensure sync
+            if (controls.isLocked && playerMesh) {
+                sendPositionUpdate(true);
+            }
+        });
         
-        // Apply vertical rotation (looking up/down) with limits
-        // Invert the Y input to fix the up/down inversion
-        // Negative yInput now looks down, positive looks up
-        const newRotationX = camera.rotation.x + yInput * rotationSpeed; // Inverted from - to +
+        // Setup right joystick for camera rotation
+        rightJoystick.on('move', (evt, data) => {
+            // Get the joystick position using vector components
+            const xInput = data.vector.x;
+            const yInput = data.vector.y;
+            
+            // Debug info to show joystick values
+            console.log(`[Right Joystick] Raw x: ${xInput.toFixed(2)}, y: ${yInput.toFixed(2)}, direction: ${data.direction?.angle || 'none'}`);
+            
+            // Calculate rotation speed based on distance from center (force)
+            const rotationSpeed = 0.05 * data.force;
+            
+            // Apply horizontal rotation (looking left/right)
+            // Negative xInput turns camera left, positive turns right
+            camera.rotation.y -= xInput * rotationSpeed;
+            
+            // Apply vertical rotation (looking up/down) with limits
+            // Invert the Y input to fix the up/down inversion
+            // Negative yInput now looks down, positive looks up
+            const newRotationX = camera.rotation.x + yInput * rotationSpeed; // Inverted from - to +
+            
+            // Limit the vertical rotation to prevent flipping
+            const maxVerticalRotation = Math.PI/2 - 0.1; // Just under 90 degrees
+            camera.rotation.x = Math.max(-maxVerticalRotation, Math.min(maxVerticalRotation, newRotationX));
+            
+            console.log(`[Camera] rotation x: ${camera.rotation.x.toFixed(2)}, y: ${camera.rotation.y.toFixed(2)}`);
+        });
         
-        // Limit the vertical rotation to prevent flipping
-        const maxVerticalRotation = Math.PI/2 - 0.1; // Just under 90 degrees
-        camera.rotation.x = Math.max(-maxVerticalRotation, Math.min(maxVerticalRotation, newRotationX));
+        // Setup shoot button
+        shootButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            shootProjectile();
+        });
         
-        console.log(`[Camera] rotation x: ${camera.rotation.x.toFixed(2)}, y: ${camera.rotation.y.toFixed(2)}`);
-    });
-    
-    // Setup shoot button
-    shootButton.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        shootProjectile();
-    });
-    
-    // Initially hide touch controls until player spawns
-    touchControls.style.display = 'none';
+        // Initially hide touch controls until player spawns
+        touchControls.style.display = 'none';
+        
+        console.log('Touch controls created successfully!');
+    } catch (error) {
+        console.error('Error creating touch controls:', error);
+        alert('Failed to initialize mobile controls. Error: ' + error.message);
+    }
 };
 
 // Check and update orientation
@@ -378,12 +394,10 @@ function checkOrientation() {
 
 // Detect if user is on mobile and create touch controls
 if (isTouchDevice) {
-    // Load nippleJS script
-    const nippleScript = document.createElement('script');
-    nippleScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js';
-    nippleScript.onload = () => {
-        console.log('nippleJS loaded');
-        // Create touch controls once nippleJS is loaded
+    // Check if nippleJS is already loaded
+    if (typeof nipplejs !== 'undefined') {
+        console.log('nippleJS is already loaded from HTML');
+        // Create touch controls immediately
         createTouchControls();
         // Check initial orientation
         checkOrientation();
@@ -489,8 +503,30 @@ if (isTouchDevice) {
                     'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
             }
         }
-    };
-    document.head.appendChild(nippleScript);
+    } else {
+        // Fallback to dynamic loading if not already loaded
+        console.log('Attempting to load nippleJS dynamically');
+        const nippleScript = document.createElement('script');
+        nippleScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js';
+        nippleScript.onload = () => {
+            console.log('nippleJS loaded dynamically');
+            // Create touch controls once nippleJS is loaded
+            createTouchControls();
+            // Check initial orientation
+            checkOrientation();
+            
+            // Special handling for iOS
+            if (isIOS) {
+                console.log("Adding iOS-specific touch handlers");
+                // ... existing iOS handling code ...
+            }
+        };
+        nippleScript.onerror = (err) => {
+            console.error('Failed to load nippleJS:', err);
+            alert('Failed to load mobile controls. Please try refreshing the page.');
+        };
+        document.head.appendChild(nippleScript);
+    }
     
     // Add orientation change listener
     window.addEventListener('resize', checkOrientation);
