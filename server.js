@@ -61,7 +61,11 @@ io.on('connection', (socket) => {
         playerCount++;
         
         // Log the initial position
-        console.log(`Player ${playerData.name} joined at position:`, players[socket.id].position);
+        console.log(`Player ${playerData.name} joined at position:`, 
+            `x=${players[socket.id].position.x.toFixed(2)}, ` +
+            `y=${players[socket.id].position.y.toFixed(2)}, ` +
+            `z=${players[socket.id].position.z.toFixed(2)}`
+        );
         
         // Send the new player all existing players
         socket.emit('currentPlayers', players);
@@ -73,6 +77,13 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('newPlayer', players[socket.id]);
         
         console.log(`Player joined: ${playerData.name} (${playerData.team}), Total: ${playerCount}`);
+        
+        // Immediately send an acknowledgment to the client that they've joined correctly
+        socket.emit('joinConfirmed', {
+            id: socket.id,
+            position: players[socket.id].position,
+            timestamp: Date.now()
+        });
     });
     
     // Handle player position and rotation updates
@@ -87,8 +98,19 @@ io.on('connection', (socket) => {
             socket.broadcast.emit('playerMoved', {
                 id: socket.id,
                 position: data.position,
-                rotation: data.rotation
+                rotation: data.rotation,
+                timestamp: Date.now()
             });
+            
+            // Every 10th update or so, log the position for debug tracking
+            if (Math.random() < 0.1) {
+                console.log(
+                    `Position update from ${players[socket.id].name}: ` +
+                    `(${data.position.x.toFixed(2)}, ` +
+                    `${data.position.y.toFixed(2)}, ` + 
+                    `${data.position.z.toFixed(2)})`
+                );
+            }
             
             // Uncomment for debugging
             // console.log(`Position update from ${players[socket.id].name}: (${data.position.x.toFixed(2)}, ${data.position.y.toFixed(2)}, ${data.position.z.toFixed(2)})`);

@@ -52,12 +52,19 @@ const SHOOT_COOLDOWN = 500; // milliseconds between shots
 
 // Player position update rate management
 let lastPositionUpdate = 0;
-const positionUpdateInterval = 50; // milliseconds between position updates for non-mobile
+const positionUpdateInterval = 30; // milliseconds between position updates for non-mobile
 
 // Position sync debugging - track last known positions from server
 let lastSentPosition = null;
 let forceSyncCounter = 0;
-const FORCE_SYNC_INTERVAL = 30; // Force sync every ~30 frames (0.5 seconds)
+const FORCE_SYNC_INTERVAL = 10; // Force sync every ~10 frames (1/6 second)
+const POSITION_SYNC_DEBUG = true; // Enable detailed position logging
+
+// Position sync reliability
+let syncAttempts = 0;
+const MAX_SYNC_RETRIES = 3;
+let syncSuccess = false;
+let initialSyncComplete = false;
 
 // Initialize scene, camera, and renderer
 const scene = new THREE.Scene();
@@ -1003,12 +1010,42 @@ socket.on('connect', function() {
     console.log('Connected to server with id:', socket.id);
 });
 
+// Handle join confirmation from server
+socket.on('joinConfirmed', function(data) {
+    console.log('[SERVER] Join confirmed with ID:', data.id);
+    console.log('[SERVER] Server knows our position:', 
+        `x=${data.position.x.toFixed(2)}, ` +
+        `y=${data.position.y.toFixed(2)}, ` +
+        `z=${data.position.z.toFixed(2)}`
+    );
+    
+    // If we're in a significantly different position than the server thinks,
+    // immediately send an update to correct it
+    if (playerMesh) {
+        const distanceFromServerPosition = Math.sqrt(
+            Math.pow(camera.position.x - data.position.x, 2) +
+            Math.pow(camera.position.y - data.position.y, 2) +
+            Math.pow(camera.position.z - data.position.z, 2)
+        );
+        
+        if (distanceFromServerPosition > 0.5) {
+            console.log(`[SYNC] Position mismatch with server (${distanceFromServerPosition.toFixed(2)} units), sending correction`);
+            sendPositionUpdate(true, true);
+        }
+    }
+});
+
 socket.on('currentPlayers', function(players) {
     console.log('Received current players:', players);
     
     // Add all existing players except ourselves
     Object.keys(players).forEach(function(id) {
         if (id !== socket.id) {
+            console.log(`Adding player ${id} at position:`,
+                `x=${players[id].position.x.toFixed(2)}, ` +
+                `y=${players[id].position.y.toFixed(2)}, ` +
+                `z=${players[id].position.z.toFixed(2)}`
+            );
             addOtherPlayer(players[id]);
         }
     });
@@ -1016,11 +1053,17 @@ socket.on('currentPlayers', function(players) {
 
 socket.on('newPlayer', function(playerInfo) {
     console.log('New player joined:', playerInfo);
+    console.log(`Player position: x=${playerInfo.position.x.toFixed(2)}, y=${playerInfo.position.y.toFixed(2)}, z=${playerInfo.position.z.toFixed(2)}`);
     addOtherPlayer(playerInfo);
 });
 
 socket.on('playerMoved', function(moveData) {
     if (otherPlayers[moveData.id]) {
+        if (POSITION_SYNC_DEBUG) {
+            console.log(`[RECEIVED] Player ${moveData.id} moved to: x=${moveData.position.x.toFixed(2)}, y=${moveData.position.y.toFixed(2)}, z=${moveData.position.z.toFixed(2)}`);
+        }
+        
+        // Update the other player's position and rotation
         otherPlayers[moveData.id].position.set(
             moveData.position.x,
             moveData.position.y,
@@ -1031,6 +1074,8 @@ socket.on('playerMoved', function(moveData) {
             moveData.rotation.y,
             moveData.rotation.z
         );
+    } else {
+        console.warn(`Received position update for unknown player: ${moveData.id}`);
     }
 });
 
@@ -1149,6 +1194,11 @@ function startGame() {
     // Save player data
     playerData.name = playerNameInput.value.trim();
     
+    // Reset sync variables
+    syncAttempts = 0;
+    syncSuccess = false;
+    initialSyncComplete = false;
+    
     // Hide start screen
     startScreen.style.display = 'none';
     
@@ -1190,13 +1240,17 @@ function startGame() {
     
     console.log('Game started with player:', playerData);
     
-    // Force an immediate position update after a short delay to ensure initial sync
-    setTimeout(() => {
-        if (controls.isLocked && playerMesh) {
-            sendPositionUpdate(true);
-            console.log('[SYNC] Sent forced initial position update');
-        }
-    }, 1000);
+    // Setup a sequence of forced position updates to ensure initial sync
+    const syncSchedule = [500, 1000, 2000, 3000, 5000]; // Send updates at these intervals (ms)
+    
+    syncSchedule.forEach(delay => {
+        setTimeout(() => {
+            if (controls.isLocked && playerMesh) {
+                sendPositionUpdate(true, true); // Force sync with log
+                console.log(`[SYNC] Sent scheduled position update after ${delay}ms`);
+            }
+        }, delay);
+    });
 }
 
 // Load the map
@@ -1245,7 +1299,7 @@ function loadMap() {
 }
 
 // Function to send position update to server
-function sendPositionUpdate(forceSync = false) {
+function sendPositionUpdate(forceSync = false, forceLog = false) {
     const newPosition = {
         x: camera.position.x,
         y: camera.position.y,
@@ -1259,25 +1313,39 @@ function sendPositionUpdate(forceSync = false) {
     
     // Only send if position/rotation changed or force sync is requested
     const positionChanged = !lastSentPosition || 
-        lastSentPosition.x !== newPosition.x || 
-        lastSentPosition.y !== newPosition.y || 
-        lastSentPosition.z !== newPosition.z;
+        Math.abs(lastSentPosition.x - newPosition.x) > 0.01 || 
+        Math.abs(lastSentPosition.y - newPosition.y) > 0.01 || 
+        Math.abs(lastSentPosition.z - newPosition.z) > 0.01;
+    
+    const shouldSync = forceSync || positionChanged;
         
-    if (forceSync || positionChanged) {
+    if (shouldSync) {
         // Store last sent position for comparison
         lastSentPosition = { ...newPosition };
         
-        // Debug log for important position updates
-        if (forceSync) {
-            console.log(`[SYNC-FORCE] Sending position: x=${newPosition.x.toFixed(2)}, y=${newPosition.y.toFixed(2)}, z=${newPosition.z.toFixed(2)}`);
+        // Debug log for position updates
+        if ((forceSync || forceLog || POSITION_SYNC_DEBUG) && positionChanged) {
+            console.log(`[SYNC${forceSync ? '-FORCE' : ''}] Sending position: x=${newPosition.x.toFixed(2)}, y=${newPosition.y.toFixed(2)}, z=${newPosition.z.toFixed(2)}`);
         }
         
+        // Send position update
         socket.emit('updatePlayer', {
             position: newPosition,
             rotation: newRotation
         });
         
+        // Mark the time of the update
         lastPositionUpdate = Date.now();
+        
+        // Increment sync attempts counter
+        syncAttempts++;
+        
+        // After a few sync attempts, mark sync as complete
+        if (syncAttempts >= MAX_SYNC_RETRIES && !initialSyncComplete) {
+            initialSyncComplete = true;
+            console.log(`[SYNC] Initial sync sequence complete after ${syncAttempts} attempts`);
+        }
+        
         return true;
     }
     
@@ -1294,11 +1362,10 @@ function animate() {
         direction.z = Number(moveForward) - Number(moveBackward);
         direction.x = Number(moveRight) - Number(moveLeft);
         
-        // Debug movement direction vector
+        // Debug movement direction vector only when moving
         if (direction.z !== 0 || direction.x !== 0) {
             // Normalize only if there's actual movement
             direction.normalize();
-            console.log(`[Direction Vector] x: ${direction.x.toFixed(2)}, z: ${direction.z.toFixed(2)}`);
             
             // Get the camera's forward and right vectors
             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -1331,7 +1398,10 @@ function animate() {
                 // Apply movement directly to camera position
                 camera.position.add(moveVector);
                 
-                console.log(`[Position] x: ${camera.position.x.toFixed(2)}, y: ${camera.position.y.toFixed(2)}, z: ${camera.position.z.toFixed(2)}`);
+                // After movement, always sync position immediately
+                if (playerMesh) {
+                    sendPositionUpdate(true);
+                }
             }
         }
         
@@ -1351,17 +1421,15 @@ function animate() {
             let forceSync = forceSyncCounter >= FORCE_SYNC_INTERVAL;
             if (forceSync) {
                 forceSyncCounter = 0;
-            }
-            
-            // Send position update to server with different strategies for mobile vs desktop
-            if (isTouchDevice) {
-                // Mobile: Always send updates to ensure real-time sync
-                sendPositionUpdate(forceSync);
+                sendPositionUpdate(true);
+            } else if (isTouchDevice) {
+                // Mobile: Always try to send updates to ensure real-time sync
+                sendPositionUpdate(false);
             } else {
                 // Desktop: Send updates based on time interval
                 const timeSinceLastUpdate = Date.now() - lastPositionUpdate;
-                if (forceSync || timeSinceLastUpdate > positionUpdateInterval) {
-                    sendPositionUpdate(forceSync);
+                if (timeSinceLastUpdate > positionUpdateInterval) {
+                    sendPositionUpdate(false);
                 }
             }
         }
