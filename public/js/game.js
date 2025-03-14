@@ -33,6 +33,159 @@ const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+// Ensure login form is properly visible on mobile
+function ensureLoginFormVisibility() {
+    // Get references to the login form elements
+    const startScreen = document.getElementById('startScreen');
+    const startContainer = startScreen.querySelector('.start-container');
+    
+    if (isTouchDevice) {
+        console.log('Ensuring login form visibility on mobile device');
+        
+        // Make sure the start screen is visible and on top
+        startScreen.style.display = 'flex';
+        startScreen.style.zIndex = '3000';
+        
+        // For iOS, add extra touchability improvements
+        if (isIOS) {
+            console.log('Applying iOS-specific form fixes');
+            
+            // Set minimum heights for form elements
+            const formElements = startScreen.querySelectorAll('input, button, .team-option');
+            formElements.forEach(elem => {
+                elem.style.minHeight = '50px';
+            });
+            
+            // Make start container more visible
+            startContainer.style.backgroundColor = 'rgba(50, 50, 50, 0.95)';
+        }
+    }
+}
+
+// Call this function when the window loads
+window.addEventListener('load', function() {
+    console.log("Window loaded - initializing login form");
+    
+    // Make sure player data is reset
+    playerData = {
+        name: '',
+        team: '',
+        color: null
+    };
+    
+    // Get references to form elements
+    const startScreen = document.getElementById('startScreen');
+    const playerNameInput = document.getElementById('playerName');
+    const teamDemocrat = document.getElementById('teamDemocrat');
+    const teamRepublican = document.getElementById('teamRepublican');
+    const startButton = document.getElementById('startButton');
+    
+    if (!startScreen || !playerNameInput || !teamDemocrat || !teamRepublican || !startButton) {
+        console.error("Failed to find all required form elements!");
+        return;
+    }
+    
+    // Reset team selection
+    teamDemocrat.classList.remove('selected');
+    teamRepublican.classList.remove('selected');
+    
+    // Clear name input and focus it
+    playerNameInput.value = '';
+    
+    // Only try to focus on desktop - can cause issues on mobile
+    if (!isTouchDevice) {
+        setTimeout(() => {
+            playerNameInput.focus();
+        }, 500);
+    }
+    
+    // Team selection
+    teamDemocrat.addEventListener('click', () => {
+        console.log("Democrat team selected");
+        teamDemocrat.classList.add('selected');
+        teamRepublican.classList.remove('selected');
+        playerData.team = 'democrats';
+        validateForm();
+    });
+
+    teamRepublican.addEventListener('click', () => {
+        console.log("Republican team selected");
+        teamRepublican.classList.add('selected');
+        teamDemocrat.classList.remove('selected');
+        playerData.team = 'republicans';
+        validateForm();
+    });
+    
+    // Add touchstart handlers for mobile
+    if (isTouchDevice) {
+        console.log("Setting up mobile-specific form handlers");
+        
+        teamDemocrat.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            console.log("Democrat team touchstart");
+            teamDemocrat.classList.add('selected');
+            teamRepublican.classList.remove('selected');
+            playerData.team = 'democrats';
+            validateForm();
+        });
+
+        teamRepublican.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            console.log("Republican team touchstart");
+            teamRepublican.classList.add('selected');
+            teamDemocrat.classList.remove('selected');
+            playerData.team = 'republicans';
+            validateForm();
+        });
+        
+        // Add touchstart handler for the start button
+        startButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            console.log("Start button touchstart");
+            if (!startButton.disabled) {
+                startGame();
+            }
+        });
+    }
+    
+    // Name input validation
+    playerNameInput.addEventListener('input', () => {
+        console.log("Name input changed: " + playerNameInput.value);
+        validateForm();
+    });
+    
+    // Start game when form is submitted
+    startButton.addEventListener('click', startGame);
+    
+    // Force validation to update button state
+    validateForm();
+    
+    function validateForm() {
+        const name = playerNameInput.value.trim();
+        const team = playerData.team;
+        
+        console.log(`Validating form - Name: "${name}" (${name.length} chars), Team: ${team}`);
+        
+        // Enable button if both name and team are selected
+        if (name.length >= 2 && team) {
+            console.log("Form valid - enabling button");
+            startButton.disabled = false;
+            startButton.style.backgroundColor = "#4CAF50";
+            startButton.style.cursor = "pointer";
+        } else {
+            console.log("Form invalid - disabling button");
+            startButton.disabled = true;
+            startButton.style.backgroundColor = "#cccccc";
+            startButton.style.cursor = "not-allowed";
+        }
+    }
+    
+    console.log("Login form initialized");
+    
+    // Ensure the login form is visible on mobile
+    ensureLoginFormVisibility();
+});
+
 // Player data
 let playerData = {
     name: '',
@@ -209,6 +362,13 @@ const createTouchControls = () => {
     try {
         console.log('Creating touch controls...');
         
+        // First, check if there's an existing touch controls container and remove it
+        const existingControls = document.getElementById('touchControls');
+        if (existingControls) {
+            existingControls.remove();
+            console.log('Removed existing touch controls');
+        }
+        
         // Create container for joysticks
         const touchControls = document.createElement('div');
         touchControls.style.position = 'absolute';
@@ -217,7 +377,8 @@ const createTouchControls = () => {
         touchControls.style.width = '100%';
         touchControls.style.height = '100%';
         touchControls.style.pointerEvents = 'none';
-        touchControls.style.zIndex = '1000';
+        touchControls.style.zIndex = '1000'; // Lower z-index than start screen
+        touchControls.style.display = 'none'; // Initially hidden
         touchControls.id = 'touchControls';
         document.body.appendChild(touchControls);
         
@@ -389,10 +550,10 @@ const createTouchControls = () => {
             shootProjectile();
         });
         
-        // Initially hide touch controls until player spawns
+        // Make sure touch controls are hidden until game starts
         touchControls.style.display = 'none';
         
-        console.log('Touch controls created successfully!');
+        console.log('Touch controls created successfully! (initially hidden)');
     } catch (error) {
         console.error('Error creating touch controls:', error);
         alert('Failed to initialize mobile controls. Error: ' + error.message);
@@ -667,8 +828,20 @@ if (isIOS) {
 controls.addEventListener('lock', function () {
     instructions.style.display = 'none';
     // Show touch controls when game starts if on a touch device
-    if (isTouchDevice && document.getElementById('touchControls')) {
-        document.getElementById('touchControls').style.display = 'block';
+    if (isTouchDevice) {
+        const touchControls = document.getElementById('touchControls');
+        if (touchControls) {
+            console.log('Enabling mobile touch controls');
+            touchControls.style.display = 'block';
+        } else {
+            console.error('Touch controls element not found when trying to display them');
+            // Try to recreate the controls
+            createTouchControls();
+            const newTouchControls = document.getElementById('touchControls');
+            if (newTouchControls) {
+                newTouchControls.style.display = 'block';
+            }
+        }
     }
 });
 
@@ -1111,4 +1284,110 @@ socket.on('currentPlayers', function(players) {
             console.log(`Adding player ${id} at position:`,
                 `x=${players[id].position.x.toFixed(2)}, ` +
                 `y=${players[id].position.y.toFixed(2)}, ` +
-                `
+                `z=${players[id].position.z.toFixed(2)}`
+            );
+            addOtherPlayer(players[id]);
+        }
+    });
+});
+
+// Start game function
+function startGame() {
+    console.log("startGame function called");
+    
+    // Get references to form elements
+    const startScreen = document.getElementById('startScreen');
+    const playerNameInput = document.getElementById('playerName');
+    
+    // Save player data
+    playerData.name = playerNameInput.value.trim();
+    
+    // Validate inputs
+    if (!playerData.name) {
+        console.error("Missing player name!");
+        alert("Please enter your name before starting");
+        return;
+    }
+    
+    if (!playerData.team) {
+        console.error("Missing team selection!");
+        alert("Please select a team before starting");
+        return;
+    }
+    
+    // Reset sync variables
+    syncAttempts = 0;
+    syncSuccess = false;
+    initialSyncComplete = false;
+    
+    // Hide start screen
+    if (startScreen) {
+        startScreen.style.display = 'none';
+        console.log("Start screen hidden");
+    } else {
+        console.error("Start screen element not found!");
+    }
+    
+    // Show loading screen
+    if (loadingScreen) {
+        loadingScreen.style.display = 'flex';
+        console.log("Loading screen displayed");
+    }
+    
+    // Create player marker
+    createPlayerMarker();
+    
+    // Load the map
+    loadMap();
+    
+    // Show instructions after hiding the start screen
+    instructions.style.display = 'block';
+    
+    // Set initial position (this will be sent to server when joining)
+    camera.position.set(0, 1.6, 0); // Reset to spawn point
+    
+    // Check orientation if on mobile and prepare touch controls
+    if (isTouchDevice) {
+        // Check orientation
+        checkOrientation();
+        
+        // Make sure touch controls exist and are ready to be displayed
+        const touchControls = document.getElementById('touchControls');
+        if (!touchControls) {
+            // If controls don't exist yet, create them
+            createTouchControls();
+            console.log("Touch controls created for game start");
+        }
+    }
+    
+    // Join the game via Socket.IO - include the initial position
+    socket.emit('joinGame', {
+        name: playerData.name,
+        team: playerData.team,
+        position: {
+            x: camera.position.x,
+            y: camera.position.y,
+            z: camera.position.z
+        },
+        rotation: {
+            x: camera.rotation.x,
+            y: camera.rotation.y,
+            z: camera.rotation.z
+        },
+        isMobile: isTouchDevice
+    });
+    
+    console.log('Game started with player:', playerData, 'isMobile:', isTouchDevice);
+    
+    // Setup a sequence of forced position updates to ensure initial sync
+    const syncSchedule = [500, 1000, 2000, 3000, 5000]; // Send updates at these intervals (ms)
+    
+    syncSchedule.forEach(delay => {
+        setTimeout(() => {
+            if (controls.isLocked && playerMesh) {
+                sendPositionUpdate(true, true); // Force sync with log
+                console.log(`[SYNC] Sent scheduled position update after ${delay}ms`);
+            }
+        }, delay);
+    });
+}
