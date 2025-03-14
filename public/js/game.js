@@ -33,6 +33,26 @@ const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+// Detect Android specifically
+const isAndroid = /Android/.test(navigator.userAgent);
+
+// Detect Samsung browser and devices specifically
+const isSamsungBrowser = /SamsungBrowser/.test(navigator.userAgent);
+// Also detect Samsung devices that might not use Samsung browser
+const isSamsungDevice = /Samsung/i.test(navigator.userAgent) || 
+                        /SM-[A-Z0-9]+/i.test(navigator.userAgent) ||
+                        /SAMSUNG/i.test(navigator.userAgent);
+
+// Log device information for debugging
+console.log("Device detection:", {
+    isTouchDevice,
+    isIOS,
+    isAndroid,
+    isSamsungBrowser,
+    isSamsungDevice,
+    userAgent: navigator.userAgent
+});
+
 // Player data
 let playerData = {
     name: '',
@@ -512,7 +532,112 @@ if (isTouchDevice) {
                     'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
             }
         }
+        // Add special handling for Android devices
+        else if (isAndroid) {
+            console.log("Adding Android-specific touch handlers");
+            
+            // For Samsung devices, ensure touch events are correctly propagated
+            const joystickElements = [
+                document.getElementById('leftJoystick'),
+                document.getElementById('rightJoystick'),
+                document.getElementById('shootButton')
+            ];
+            
+            joystickElements.forEach(element => {
+                if (element) {
+                    // Make elements more visible and larger touch targets
+                    element.style.border = '2px solid rgba(255, 255, 255, 0.8)';
+                    element.style.borderRadius = '50%';
+                    element.style.backgroundColor = 'rgba(50, 50, 50, 0.3)';
+                    
+                    // For Samsung devices, use non-passive handlers
+                    ['touchstart', 'touchmove', 'touchend'].forEach(eventType => {
+                        element.addEventListener(eventType, function(e) {
+                            console.log(`Android touch ${eventType} on ${element.id}`);
+                            e.preventDefault();
+                        }, { passive: false });
+                    });
+                }
+            });
+            
+            // Add a dedicated touch handler for the instructions element
+            document.addEventListener('touchstart', function(e) {
+                console.log("Android document touchstart");
+                
+                // If instructions are visible, try to start the game
+                if (instructions.style.display !== 'none' && !controls.isLocked) {
+                    console.log("Android: instructions visible, attempting to start game");
+                    controls.lock();
+                }
+            });
+            
+            // Samsung-specific fixes
+            if (isSamsungBrowser) {
+                console.log("Samsung browser detected, applying Samsung-specific fixes");
+                
+                // Make instructions element super responsive on Samsung devices
+                instructions.style.position = 'absolute';
+                instructions.style.zIndex = '9999'; // Ensure it's above everything
+                
+                // Add explicit tap handler with multiple approaches for Samsung
+                instructions.addEventListener('touchstart', function(e) {
+                    console.log("Samsung touchstart on instructions");
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Use timeout to allow the touch to complete
+                    setTimeout(() => {
+                        controls.lock();
+                        
+                        // If that didn't work, try a click event
+                        setTimeout(() => {
+                            const clickEvent = new MouseEvent('click', {
+                                view: window,
+                                bubbles: true,
+                                cancelable: true
+                            });
+                            instructions.dispatchEvent(clickEvent);
+                            
+                            // Last resort - direct DOM interaction
+                            setTimeout(() => {
+                                instructions.style.display = 'none';
+                                if (document.getElementById('touchControls')) {
+                                    document.getElementById('touchControls').style.display = 'block';
+                                }
+                                // Directly trigger the lock event
+                                controls.dispatchEvent({ type: 'lock' });
+                            }, 50);
+                        }, 50);
+                    }, 20);
+                }, { passive: false });
+                
+                // Add a document-level tap handler specifically for Samsung
+                document.addEventListener('touchstart', function(e) {
+                    console.log("Samsung document touchstart");
+                    
+                    if (instructions.style.display !== 'none' && !controls.isLocked && startScreen.style.display === 'none') {
+                        console.log("Samsung: Attempting to start game from document touchstart");
+                        e.preventDefault();
+                        
+                        // Hide instructions
+                        instructions.style.display = 'none';
+                        
+                        // Try to lock controls
+                        controls.lock();
+                        
+                        // If controls lock fails, show touch controls directly
+                        setTimeout(() => {
+                            if (!controls.isLocked && document.getElementById('touchControls')) {
+                                document.getElementById('touchControls').style.display = 'block';
+                                controls.dispatchEvent({ type: 'lock' });
+                            }
+                        }, 100);
+                    }
+                }, { passive: false });
+            }
+        }
     };
+    
     document.head.appendChild(nippleScript);
     
     // Add orientation change listener
@@ -527,7 +652,7 @@ instructions.addEventListener('click', function () {
 
 // Enhanced handling for iOS
 instructions.addEventListener('touchstart', function (e) {
-    console.log('Touchstart event fired on iOS: ' + isIOS);
+    console.log('Touchstart event fired on device: iOS=' + isIOS + ', Android=' + isAndroid);
     e.preventDefault();
     
     // For iOS Safari, we need a more aggressive approach
@@ -561,12 +686,29 @@ instructions.addEventListener('touchstart', function (e) {
                 }, 300);
             }, 200);
         }, 100);
+    } else if (isAndroid) {
+        console.log('Android device detected, using specific handling');
+        // Use a short delay for Android devices
+        setTimeout(() => {
+            controls.lock();
+            
+            // Fallback with click simulation for Samsung devices
+            setTimeout(() => {
+                console.log('Android fallback: simulating click event');
+                const clickEvent = new MouseEvent('click', {
+                    view: window,
+                    bubbles: true,
+                    cancelable: true
+                });
+                instructions.dispatchEvent(clickEvent);
+            }, 100);
+        }, 50);
     } else {
         controls.lock();
     }
 });
 
-// Older iOS devices sometimes work better with touchend
+// Older iOS devices and some Android devices work better with touchend
 instructions.addEventListener('touchend', function (e) {
     console.log('Touchend event fired');
     if (isIOS) {
@@ -575,6 +717,10 @@ instructions.addEventListener('touchend', function (e) {
         setTimeout(() => {
             controls.lock();
         }, 10);
+    } else if (isAndroid) {
+        e.preventDefault();
+        console.log('Android touchend handler triggered');
+        controls.lock();
     }
 });
 
@@ -630,8 +776,92 @@ if (isIOS) {
     });
 }
 
+// Add special handling for Samsung devices
+if (isSamsungBrowser || isSamsungDevice) {
+    // Create fullscreen overlay for Samsung devices
+    const samsungTapOverlay = document.createElement('div');
+    samsungTapOverlay.id = 'samsungTapOverlay';
+    samsungTapOverlay.style.position = 'absolute';
+    samsungTapOverlay.style.top = '0';
+    samsungTapOverlay.style.left = '0';
+    samsungTapOverlay.style.width = '100%';
+    samsungTapOverlay.style.height = '100%';
+    samsungTapOverlay.style.zIndex = '3000';
+    samsungTapOverlay.style.display = 'none';
+    samsungTapOverlay.style.background = 'transparent';
+    document.body.appendChild(samsungTapOverlay);
+    
+    // Add instructions text
+    const samsungTapText = document.createElement('div');
+    samsungTapText.style.position = 'absolute';
+    samsungTapText.style.top = '50%';
+    samsungTapText.style.left = '50%';
+    samsungTapText.style.transform = 'translate(-50%, -50%)';
+    samsungTapText.style.color = 'white';
+    samsungTapText.style.fontSize = '26px';
+    samsungTapText.style.textAlign = 'center';
+    samsungTapText.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    samsungTapText.style.padding = '30px';
+    samsungTapText.style.borderRadius = '15px';
+    samsungTapText.style.width = '80%';
+    samsungTapText.style.maxWidth = '400px';
+    samsungTapText.innerHTML = 'Tap anywhere<br>to start';
+    samsungTapOverlay.appendChild(samsungTapText);
+    
+    // Multiple touch event listeners for Samsung
+    ['touchstart', 'touchend', 'click'].forEach(eventType => {
+        samsungTapOverlay.addEventListener(eventType, function(e) {
+            console.log(`Samsung overlay ${eventType} fired`);
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Hide the overlay
+            samsungTapOverlay.style.display = 'none';
+            
+            // Try multiple methods to start the game
+            controls.lock();
+            
+            // Timeout approach as fallback
+            setTimeout(() => {
+                // Direct DOM manipulation if needed
+                instructions.style.display = 'none';
+                if (document.getElementById('touchControls')) {
+                    document.getElementById('touchControls').style.display = 'block';
+                }
+                // Manually dispatch the lock event
+                controls.dispatchEvent({ type: 'lock' });
+            }, 50);
+        }, { passive: false });
+    });
+    
+    // Show the Samsung overlay when needed
+    controls.addEventListener('unlock', function() {
+        if (startScreen.style.display === 'none') {
+            instructions.style.display = 'none';
+            samsungTapOverlay.style.display = 'block';
+        }
+    });
+    
+    // Also update the main instructions handling for Samsung devices
+    instructions.addEventListener('touchstart', function(e) {
+        if (isSamsungBrowser || isSamsungDevice) {
+            console.log("Samsung device touchstart on instructions");
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Hide instructions and show Samsung overlay
+            instructions.style.display = 'none';
+            samsungTapOverlay.style.display = 'block';
+        }
+    }, { passive: false });
+}
+
 controls.addEventListener('lock', function () {
     instructions.style.display = 'none';
+    // Hide any Samsung overlay that might be visible
+    if (document.getElementById('samsungTapOverlay')) {
+        document.getElementById('samsungTapOverlay').style.display = 'none';
+    }
     // Show touch controls when game starts if on a touch device
     if (isTouchDevice && document.getElementById('touchControls')) {
         document.getElementById('touchControls').style.display = 'block';
@@ -639,7 +869,15 @@ controls.addEventListener('lock', function () {
 });
 
 controls.addEventListener('unlock', function () {
-    instructions.style.display = 'block';
+    // For Samsung devices, show the dedicated overlay instead of regular instructions
+    if ((isSamsungBrowser || isSamsungDevice) && 
+        startScreen.style.display === 'none' && 
+        document.getElementById('samsungTapOverlay')) {
+        instructions.style.display = 'none';
+        document.getElementById('samsungTapOverlay').style.display = 'block';
+    } else {
+        instructions.style.display = 'block';
+    }
 });
 
 // Setup key controls
@@ -1413,4 +1651,27 @@ window.addEventListener('load', function() {
 });
 
 // Start the animation
-animate(); 
+animate();
+
+// Add a custom event listener for Samsung devices
+document.addEventListener('startGame', function() {
+    console.log('Custom startGame event received');
+    
+    // Try to lock controls
+    if (!controls.isLocked) {
+        controls.lock();
+        
+        // Fallback direct manipulation if needed
+        setTimeout(() => {
+            if (!controls.isLocked) {
+                console.log('Fallback method for Samsung devices');
+                instructions.style.display = 'none';
+                if (document.getElementById('touchControls')) {
+                    document.getElementById('touchControls').style.display = 'block';
+                }
+                // Manually dispatch the lock event
+                controls.dispatchEvent({ type: 'lock' });
+            }
+        }, 100);
+    }
+}); 

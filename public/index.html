@@ -65,6 +65,29 @@
                     }
                 }, 500);
             }
+            
+            // Samsung/Android specific event fixes
+            if (/Android/.test(navigator.userAgent) || /SamsungBrowser/.test(navigator.userAgent)) {
+                console.log("Android/Samsung device detected by initial script");
+                // Force hardware acceleration to improve touch responsiveness
+                document.body.style.transform = 'translateZ(0)';
+                document.body.style.webkitTransform = 'translateZ(0)';
+                
+                // Add event handling for instruction overlay
+                setTimeout(function() {
+                    var instructionsElement = document.getElementById('instructions');
+                    if (instructionsElement) {
+                        ['touchstart', 'touchend', 'click'].forEach(function(eventType) {
+                            instructionsElement.addEventListener(eventType, function(e) {
+                                console.log("Samsung/Android " + eventType + " on instructions from initial script");
+                                e.preventDefault();
+                                var event = new CustomEvent('startGame');
+                                document.dispatchEvent(event);
+                            }, {passive: false});
+                        });
+                    }
+                }, 1000);
+            }
         });
     </script>
     <style>
@@ -83,6 +106,9 @@
             -ms-user-select: none;
             /* Prevent context menu */
             -webkit-touch-callout: none;
+            /* Hardware acceleration for better touch responsiveness */
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
         }
         canvas {
             width: 100%;
@@ -96,6 +122,41 @@
             cursor: pointer;
             pointer-events: auto;
             -webkit-tap-highlight-color: transparent;
+            /* Improved touch handling for Samsung/Android devices */
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-user-drag: none;
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+            -webkit-touch-action: manipulation;
+            touch-action: manipulation;
+            -ms-touch-action: manipulation;
+            /* Enhanced for Samsung and other Android devices */
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            will-change: transform;
+            
+            /* Make tap area larger for better touch detection */
+            min-height: 50px;
+            padding: 30px;
+            margin: -10px;
+        }
+        /* Samsung browser-specific styles */
+        @media screen and (-webkit-min-device-pixel-ratio:0) {
+            #instructions {
+                padding: 40px 30px;
+                font-size: 22px;
+                outline: none;
+                -webkit-appearance: none;
+                appearance: none;
+            }
+            
+            /* Increase touch target size for Samsung devices */
+            .team-option, button {
+                min-height: 50px;
+                padding-top: 20px;
+                padding-bottom: 20px;
+            }
         }
         #startScreen {
             position: absolute;
