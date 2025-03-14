@@ -96,8 +96,17 @@ scene.add(ground);
 // Set up first-person controls
 const controls = new PointerLockControls(camera, document.body);
 
+// Additional mobile device compatibility
+if (isTouchDevice) {
+    // Add a debug tap event to document.body for testing
+    document.body.addEventListener('touchstart', function(e) {
+        console.log('Body touchstart registered');
+    });
+}
+
 // Create an instructions overlay
 const instructions = document.createElement('div');
+instructions.id = 'instructions';
 instructions.style.position = 'absolute';
 instructions.style.top = '50%';
 instructions.style.width = '100%';
@@ -105,8 +114,16 @@ instructions.style.textAlign = 'center';
 instructions.style.color = 'white';
 instructions.style.fontSize = '18px';
 instructions.style.transform = 'translateY(-50%)';
-instructions.style.padding = '10px';
-instructions.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+instructions.style.padding = '20px';
+instructions.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+instructions.style.zIndex = '2000';
+instructions.style.cursor = 'pointer';
+
+// Mobile-specific styles to improve touchability
+if (isTouchDevice) {
+    instructions.style.fontSize = '22px';
+    instructions.style.padding = '30px 20px';
+}
 
 // Default instructions for desktop
 const desktopInstructions = 'Click to play<br>WASD = Move<br>Mouse = Look<br>SPACE = Shoot<br>ESC = Pause';
@@ -303,6 +320,12 @@ if (isTouchDevice) {
 
 // Event listeners for pointer lock
 instructions.addEventListener('click', function () {
+    controls.lock();
+});
+
+// Add touchstart event listener for iOS devices
+instructions.addEventListener('touchstart', function (e) {
+    e.preventDefault();
     controls.lock();
 });
 
