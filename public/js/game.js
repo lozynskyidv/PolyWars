@@ -270,11 +270,16 @@ const createTouchControls = () => {
         moveLeft = false;
         moveRight = false;
         
-        // Set movement based on joystick position
-        if (forward < -0.5) moveForward = true;
-        if (forward > 0.5) moveBackward = true;
-        if (right < -0.5) moveLeft = true;
-        if (right > 0.5) moveRight = true;
+        // Set movement based on joystick position using less aggressive thresholds
+        // and respecting the coordinate system (inverted Y-axis on joystick)
+        if (forward < -0.2) moveForward = true;
+        if (forward > 0.2) moveBackward = true;
+        if (right < -0.2) moveLeft = true;
+        if (right > 0.2) moveRight = true;
+        
+        // Log joystick values for debugging
+        console.log(`Joystick values - forward: ${forward}, right: ${right}`);
+        console.log(`Movement flags - forward: ${moveForward}, back: ${moveBackward}, left: ${moveLeft}, right: ${moveRight}`);
     });
     
     leftJoystick.on('end', () => {
@@ -1031,19 +1036,28 @@ function animate() {
         // Calculate movement direction
         direction.z = Number(moveForward) - Number(moveBackward);
         direction.x = Number(moveRight) - Number(moveLeft);
-        direction.normalize(); // Normalize for consistent movement speed
         
-        // Apply movement to velocity
+        // Make sure we have a valid direction vector
+        if (direction.z !== 0 || direction.x !== 0) {
+            direction.normalize(); // Normalize for consistent movement speed
+        }
+        
+        // Apply movement to velocity with more direct mapping for mobile
         if (moveForward || moveBackward) velocity.z -= direction.z * speed;
         if (moveLeft || moveRight) velocity.x -= direction.x * speed;
+        
+        // Log velocity values for debugging
+        if (moveForward || moveBackward || moveLeft || moveRight) {
+            console.log(`Velocity - x: ${velocity.x}, z: ${velocity.z}`);
+        }
         
         // Apply velocity to controls (camera)
         controls.moveRight(-velocity.x);
         controls.moveForward(-velocity.z);
         
-        // Dampen velocity for smooth stops
-        velocity.x *= 0.9;
-        velocity.z *= 0.9;
+        // Dampen velocity for smooth stops (slightly stronger dampening)
+        velocity.x *= 0.85;
+        velocity.z *= 0.85;
         
         // Update player mesh position to match camera
         if (playerMesh) {
